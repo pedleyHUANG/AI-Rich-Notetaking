@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-log.py -- command-line editor for the AI Log's data file (ai_log_data.json).
+log.py -- command-line editor for the AI Log's data (see store_io.py).
 
-This edits the same JSON file that server.py serves to the browser, so
+This edits the same on-disk data that server.py serves to the browser, so
 CLI changes and browser changes stay in sync -- just reload the page
 (or restart the server) to see edits made from either side.
 
@@ -19,7 +19,9 @@ Entry schema:
 Commands:
     log.py add    [--title T] [--question Q] [--category C ...] [--content TXT]
     log.py edit   <id> [--title T] [--question Q] [--category C ...] [--content TXT] [--add-note TXT]
+    log.py delete <id>
     log.py tag    <name> <#hexcolor>
+    log.py rmtag  <name>
     log.py list   [--category C] [--prompt-only]
 
 All fields on `add` are optional -- you can log a bare placeholder and
@@ -28,37 +30,22 @@ and something is piped into stdin, that's used as the content.
 """
 
 import argparse
-import json
 import sys
 from datetime import datetime
 from pathlib import Path
 
-DEFAULT_FILE = 'ai_log_data.json'
+import store_io
+
+DEFAULT_DIR = '.'
 MAX_CATEGORIES = 6
 
-SEED_STORE = {
-    "tags": {
-        "idea": "#6c8ebf",
-        "bug": "#d1584f",
-        "decision": "#6fa273",
-        "note": "#9b8f6b",
-        "PROMPT!": "#ff8a3d"
-    },
-    "entries": []
-}
+
+def load_store(directory: Path):
+    return store_io.load_full_store(directory)
 
 
-def load_store(path: Path):
-    if not path.exists():
-        path.write_text(json.dumps(SEED_STORE, indent=2), encoding='utf-8')
-    try:
-        return json.loads(path.read_text(encoding='utf-8'))
-    except json.JSONDecodeError as err:
-        sys.exit(f'{path} is not valid JSON: {err}')
-
-
-def save_store(path: Path, store):
-    path.write_text(json.dumps(store, indent=2), encoding='utf-8')
+def save_store(directory: Path, store):
+    store_io.save_full_store(directory, store)
 
 
 def clean_categories(store, categories):
@@ -84,8 +71,8 @@ def read_content_arg(content):
 
 
 def cmd_add(args):
-    path = Path(args.file)
-    store = load_store(path)
+    directory = Path(args.dir)
+    store = load_store(directory)
 
     categories = clean_categories(store, args.category or [])
     content = read_content_arg(args.content)
@@ -99,14 +86,14 @@ def cmd_add(args):
         'content': content,
     }
     store['entries'].append(entry)
-    save_store(path, store)
+    save_store(directory, store)
     label = entry['title'] or '(untitled)'
     print(f'Added entry "{label}" [{", ".join(categories) or "no category"}] id={entry["id"]}')
 
 
 def cmd_edit(args):
-    path = Path(args.file)
-    store = load_store(path)
+    directory = Path(args.dir)
+    store = load_store(directory)
 
     entry = next((e for e in store['entries'] if e['id'] == args.id), None)
     if entry is None:
@@ -124,25 +111,53 @@ def cmd_edit(args):
         stamp = datetime.now().strftime('%H:%M:%S')
         entry['content'] = (entry['content'] + '\n\n' if entry.get('content') else '') + f'[{stamp}] {args.add_note}'
 
-    save_store(path, store)
+    save_store(directory, store)
     print(f'Updated entry {args.id}')
 
 
+def cmd_delete(args):
+    directory = Path(args.dir)
+    store = load_store(directory)
+
+    before = len(store['entries'])
+    store['entries'] = [e for e in store['entries'] if e['id'] != args.id]
+    if len(store['entries']) == before:
+        sys.exit(f'No entry with id "{args.id}". Use `log.py list` to see ids.')
+
+    save_store(directory, store)
+    print(f'Deleted entry {args.id}')
+
+
 def cmd_tag(args):
-    path = Path(args.file)
-    store = load_store(path)
+    directory = Path(args.dir)
+    store = load_store(directory)
 
     color = args.color
     if not color.startswith('#'):
         color = '#' + color
     store['tags'][args.name] = color
-    save_store(path, store)
+    save_store(directory, store)
     print(f'Category "{args.name}" set to {color}')
 
 
+def cmd_rmtag(args):
+    directory = Path(args.dir)
+    store = load_store(directory)
+
+    if args.name not in store['tags']:
+        sys.exit(f'No such category "{args.name}".')
+
+    del store['tags'][args.name]
+    for entry in store['entries']:
+        entry['categories'] = [c for c in entry.get('categories', []) if c != args.name]
+
+    save_store(directory, store)
+    print(f'Removed category "{args.name}" (and stripped it from all entries)')
+
+
 def cmd_list(args):
-    path = Path(args.file)
-    store = load_store(path)
+    directory = Path(args.dir)
+    store = load_store(directory)
 
     entries = store['entries']
     if args.prompt_only:
@@ -162,8 +177,8 @@ def cmd_list(args):
 
 
 def build_parser():
-    parser = argparse.ArgumentParser(description="Command-line editor for the AI Log's data file")
-    parser.add_argument('--file', default=DEFAULT_FILE, help=f'path to the JSON data file (default: {DEFAULT_FILE})')
+    parser = argparse.ArgumentParser(description="Command-line editor for the AI Log's data")
+    parser.add_argument('--dir', default=DEFAULT_DIR, help=f'directory holding the log data files (default: {DEFAULT_DIR})')
     sub = parser.add_subparsers(dest='command', required=True)
 
     p_add = sub.add_parser('add', help='add a new log entry (all fields optional)')
@@ -182,10 +197,18 @@ def build_parser():
     p_edit.add_argument('--add-note', default=None, help='appends a timestamped line instead of replacing content')
     p_edit.set_defaults(func=cmd_edit)
 
+    p_delete = sub.add_parser('delete', help='delete an entry')
+    p_delete.add_argument('id')
+    p_delete.set_defaults(func=cmd_delete)
+
     p_tag = sub.add_parser('tag', help='add or update a category color')
     p_tag.add_argument('name')
     p_tag.add_argument('color', help='hex color, e.g. #ff8a3d or ff8a3d')
     p_tag.set_defaults(func=cmd_tag)
+
+    p_rmtag = sub.add_parser('rmtag', help='delete a category and strip it from all entries')
+    p_rmtag.add_argument('name')
+    p_rmtag.set_defaults(func=cmd_rmtag)
 
     p_list = sub.add_parser('list', help='list entries in the terminal')
     p_list.add_argument('--category', default=None)

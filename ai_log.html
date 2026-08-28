@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>AI Log</title>
+<link rel="stylesheet" href="vendor/katex.min.css">
+<link rel="stylesheet" href="vendor/highlight-theme.min.css">
 <style>
   :root{
     --bg: #eef0f3;
@@ -299,19 +301,6 @@
     margin: 0 0 4px;
     display:flex; align-items:center; gap:8px;
   }
-  .prompt-badge{
-    font-family: var(--mono); font-size:0.62rem; color: var(--prompt);
-    border: 1px solid var(--prompt); border-radius: 10px; padding: 1px 7px;
-    text-transform:none; letter-spacing:0;
-  }
-  #prompt-list{ margin-top: 10px; max-height: 220px; overflow-y:auto; }
-  .prompt-item{
-    display:block; width:100%; text-align:left;
-    background: var(--prompt-soft); border: 1px solid transparent; border-radius:6px;
-    padding: 7px 10px; margin-bottom:6px; font-size: 0.82rem; color:#8a4a1c; cursor:pointer;
-    transition: border-color .15s ease;
-  }
-  .prompt-item:hover{ border-color: var(--prompt); }
   .prompt-empty{ font-size: 0.8rem; color: var(--text-faint); font-style: italic; }
 
   #add-entry-btn{ margin-top: 14px; width:100%; }
@@ -334,6 +323,105 @@
   .tagchip .swatch{ width:8px; height:8px; border-radius:50%; }
   .row{ display:flex; gap:8px; align-items:center; }
   .row input[type=text]{ flex:1; }
+  .backdate-label{
+    display:flex; align-items:center; gap:6px;
+    text-transform:none; letter-spacing:0; font-size:0.82rem; color: var(--text-dim);
+    margin: 12px 0 4px; cursor:pointer;
+  }
+  .backdate-label input[type=checkbox]{ width:auto; margin:0; }
+  #backdate-fields input[type=date]{ flex:1.4; }
+  #backdate-fields select{ flex:1; }
+
+  /* ---------- category dropdown (add form, edit form, filter bar) ---------- */
+  .dropdown-wrap{ margin-top:4px; }
+  .dropdown-toggle{
+    display:flex; align-items:center; gap:6px;
+    background: var(--surface-alt); border: 1px solid var(--border); border-radius: 6px;
+    padding: 7px 11px; font-size: 0.85rem; cursor:pointer; color: var(--text-dim); width:100%;
+    text-align:left; justify-content:space-between;
+  }
+  .dropdown-toggle:hover{ border-color: var(--text-faint); }
+  .dropdown-toggle .chev{ font-size:0.7rem; color: var(--text-faint); transition: transform .2s ease; }
+  .dropdown-toggle.open .chev{ transform: rotate(180deg); }
+  .dropdown-pills{ display:flex; flex-wrap:wrap; gap:5px; margin-top:6px; }
+  .dropdown-panel .chip-row{ padding: 8px 2px 2px; }
+
+  .tagchip-del{
+    background:none; border:none; cursor:pointer; color: var(--text-faint);
+    font-size: 0.9rem; line-height:1; padding:0; margin:0;
+  }
+  .tagchip-del:hover{ color:#b5453d; }
+
+  button.danger{ background:#fdf1ef; border-color:#f0c9c2; color:#8a3a30; }
+  button.danger:hover{ border-color:#b5453d; }
+
+  /* ---------- filter bar ---------- */
+  .filter-bar{ display:flex; gap:10px; align-items:flex-start; margin-left:auto; flex-shrink:0; }
+  .filter-bar input[type=text]{ width:160px; }
+  .filter-dropdown{ position:relative; width:200px; }
+  .filter-dropdown .dropdown-panel{
+    position:absolute; right:0; top:100%; z-index:5; width:240px;
+    background: transparent; border: 1px solid transparent; border-radius:8px;
+    margin-top:4px; padding: 0 10px;
+    max-height:0; overflow:hidden; transition:max-height .2s ease, padding .2s ease;
+  }
+  .filter-dropdown .dropdown-panel.open{
+    max-height:320px; overflow-y:auto; padding: 8px 10px;
+    background: var(--surface); border-color: var(--border); box-shadow: 0 6px 20px rgba(0,0,0,0.12);
+  }
+  .filter-clear{ font-size:0.72rem; color: var(--text-faint); background:none; border:none; cursor:pointer; padding:4px 2px; }
+  .filter-clear:hover{ color: var(--text); }
+
+  /* ---------- entry markdown rendering ---------- */
+  .rendered-content{ font-size: 0.88rem; line-height:1.55; }
+  .rendered-content p{ margin: 0 0 0.7em; }
+  .rendered-content p:last-child{ margin-bottom:0; }
+  .rendered-content pre{
+    background:#1e1e1e; border-radius:6px; padding:10px 12px; overflow-x:auto;
+    font-size:0.8rem; margin: 0.6em 0;
+  }
+  .rendered-content pre code{ font-family: var(--mono); background:none; padding:0; }
+  .rendered-content code{
+    font-family: var(--mono); background: var(--surface-alt); border-radius:4px; padding:1px 5px; font-size:0.85em;
+  }
+  .rendered-content ul, .rendered-content ol{ margin: 0.4em 0; padding-left: 1.4em; }
+  .rendered-content blockquote{
+    border-left: 3px solid var(--border); margin: 0.6em 0; padding: 2px 12px; color: var(--text-dim);
+  }
+  .rendered-content h1, .rendered-content h2, .rendered-content h3{
+    font-family: var(--display); margin: 0.6em 0 0.3em;
+  }
+  .rendered-content table{ border-collapse:collapse; margin: 0.6em 0; }
+  .rendered-content th, .rendered-content td{ border:1px solid var(--border); padding:4px 8px; font-size:0.85em; }
+  .rendered-content a{ color:#3a6b46; }
+  .rendered-content img{ max-width:100%; }
+
+  /* ---------- expand modal ---------- */
+  .modal-overlay{
+    position:fixed; inset:0; background: rgba(20,22,26,0.45);
+    display:flex; align-items:center; justify-content:center; z-index:50;
+  }
+  .modal-overlay[hidden]{ display:none; }
+  .modal-box{
+    background: var(--surface); border-radius: 10px; width: min(820px, 92vw); height: min(680px, 88vh);
+    display:flex; flex-direction:column; overflow:hidden; box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+  }
+  .modal-head{
+    display:flex; align-items:center; gap:14px; padding: 14px 18px; border-bottom:1px solid var(--border);
+    flex-shrink:0;
+  }
+  .modal-head .modal-title{ font-family: var(--display); font-weight:700; font-size:0.95rem; flex:1; }
+  .modal-tabs{ display:flex; gap:4px; }
+  .modal-tabs button{
+    background:none; border:1px solid var(--border); border-radius:5px; padding:5px 12px; font-size:0.8rem;
+    cursor:pointer; color: var(--text-dim);
+  }
+  .modal-tabs button.active{ background: var(--surface-alt); color: var(--text); font-weight:600; border-color: var(--text-faint); }
+  #modal-close{ background:none; border:none; font-size:1.3rem; cursor:pointer; color: var(--text-faint); line-height:1; padding:0 4px; }
+  #modal-close:hover{ color: var(--text); }
+  .modal-body{ flex:1; overflow-y:auto; padding: 18px 22px; }
+  #modal-editor{ width:100%; height:100%; min-height:100%; font-size:0.88rem; }
+  .modal-actions{ display:flex; gap:8px; justify-content:flex-end; padding: 12px 18px; border-top:1px solid var(--border); flex-shrink:0; }
 </style>
 </head>
 <body>
@@ -351,17 +439,24 @@
     <div class="center-head">
       <h1>AI Log</h1>
       <span class="count" id="entry-count"></span>
+      <div class="filter-bar">
+        <input type="text" id="search-title" placeholder="Search titles&hellip;">
+        <div class="filter-dropdown" id="filter-dropdown">
+          <button class="dropdown-toggle" id="filter-toggle" type="button">
+            <span id="filter-toggle-label">All tags</span><span class="chev">&#9662;</span>
+          </button>
+          <div class="dropdown-panel" id="filter-panel">
+            <button class="filter-clear" id="filter-clear" type="button">Clear filters</button>
+            <div class="chip-row" id="filter-chips"></div>
+          </div>
+        </div>
+      </div>
       <span class="save-status" id="save-status">Connecting&hellip;</span>
     </div>
     <div id="log-root"></div>
   </main>
 
   <aside class="rightpanel">
-    <section class="panel">
-      <h2>PROMPT! <span class="prompt-badge">quick list</span></h2>
-      <div id="prompt-list"></div>
-    </section>
-
     <section class="panel">
       <h2>Add entry</h2>
       <label for="f-title">Title <span class="hint">(optional)</span></label>
@@ -377,6 +472,12 @@
 
       <label for="f-content">Content <span class="hint">(optional)</span></label>
       <textarea id="f-content" placeholder="Log content..."></textarea>
+
+      <label class="backdate-label"><input type="checkbox" id="f-backdate"> Log this in the past</label>
+      <div class="row" id="backdate-fields" hidden>
+        <input type="date" id="f-backdate-date">
+        <select id="f-backdate-hour"></select>
+      </div>
 
       <button class="primary" id="add-entry-btn">Add entry</button>
     </section>
@@ -394,20 +495,64 @@
 
 </div>
 
+<div class="modal-overlay" id="entry-modal" hidden>
+  <div class="modal-box">
+    <div class="modal-head">
+      <span class="modal-title" id="modal-title"></span>
+      <div class="modal-tabs">
+        <button type="button" data-tab="preview" class="active" id="modal-tab-preview">Preview</button>
+        <button type="button" data-tab="edit" id="modal-tab-edit">Edit</button>
+      </div>
+      <button id="modal-close" aria-label="Close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div id="modal-preview" class="rendered-content"></div>
+      <textarea id="modal-editor" hidden></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="primary" id="modal-save">Save</button>
+      <button id="modal-cancel">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script src="vendor/marked.min.js"></script>
+<script src="vendor/dompurify.min.js"></script>
+<script src="vendor/highlight.min.js"></script>
+<script src="vendor/hljs-lang/python.min.js"></script>
+<script src="vendor/hljs-lang/javascript.min.js"></script>
+<script src="vendor/hljs-lang/typescript.min.js"></script>
+<script src="vendor/hljs-lang/bash.min.js"></script>
+<script src="vendor/hljs-lang/json.min.js"></script>
+<script src="vendor/hljs-lang/xml.min.js"></script>
+<script src="vendor/hljs-lang/css.min.js"></script>
+<script src="vendor/hljs-lang/c.min.js"></script>
+<script src="vendor/hljs-lang/cpp.min.js"></script>
+<script src="vendor/hljs-lang/java.min.js"></script>
+<script src="vendor/hljs-lang/sql.min.js"></script>
+<script src="vendor/hljs-lang/yaml.min.js"></script>
+<script src="vendor/katex.min.js"></script>
+<script src="vendor/katex-auto-render.min.js"></script>
 <script>
 (function(){
 
   let store = { tags: {}, entries: [] };
   const addSelected = new Set();
+  const filterState = { searchText: '', tags: new Set() };
 
   const sidebarScroll = document.getElementById('sidebar-scroll');
   const logRoot = document.getElementById('log-root');
-  const promptListEl = document.getElementById('prompt-list');
   const addChipsEl = document.getElementById('add-chips');
   const tagListEl = document.getElementById('tag-list');
   const questionWrap = document.getElementById('question-wrap');
   const statusEl = document.getElementById('save-status');
   const countEl = document.getElementById('entry-count');
+  const searchInput = document.getElementById('search-title');
+  const filterToggle = document.getElementById('filter-toggle');
+  const filterToggleLabel = document.getElementById('filter-toggle-label');
+  const filterPanel = document.getElementById('filter-panel');
+  const filterChipsEl = document.getElementById('filter-chips');
+  const filterClearBtn = document.getElementById('filter-clear');
 
   function pad(n){ return String(n).padStart(2,'0'); }
 
@@ -428,6 +573,103 @@
     const d = new Date(ts);
     return d.toLocaleTimeString(undefined, { hour:'2-digit', minute:'2-digit' });
   }
+
+  /* ---------- markdown / code / LaTeX rendering ---------- */
+  let markedConfigured = false;
+  function configureMarked(){
+    if(markedConfigured) return;
+    marked.setOptions({ breaks: true, gfm: true });
+    const renderer = new marked.Renderer();
+    renderer.code = function(code, infostring){
+      const lang = (infostring || '').trim().split(/\s+/)[0];
+      let highlighted;
+      if(window.hljs && lang && hljs.getLanguage(lang)){
+        highlighted = hljs.highlight(code, { language: lang }).value;
+      } else if(window.hljs){
+        highlighted = hljs.highlightAuto(code).value;
+      } else {
+        highlighted = code.replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+      }
+      return '<pre><code class="hljs' + (lang ? ' language-' + lang : '') + '">' + highlighted + '</code></pre>';
+    };
+    marked.use({ renderer });
+    markedConfigured = true;
+  }
+
+  function renderMarkdown(el, text){
+    configureMarked();
+    const rawHtml = marked.parse(text || '');
+    el.innerHTML = window.DOMPurify ? DOMPurify.sanitize(rawHtml, { ADD_ATTR: ['target'] }) : rawHtml;
+    if(window.renderMathInElement){
+      renderMathInElement(el, {
+        delimiters: [
+          { left: '$$', right: '$$', display: true },
+          { left: '$', right: '$', display: false },
+          { left: '\\(', right: '\\)', display: false },
+          { left: '\\[', right: '\\]', display: true }
+        ],
+        throwOnError: false
+      });
+    }
+    el.querySelectorAll('img').forEach(img => {
+      img.addEventListener('load', () => refreshOpenHeight(el.closest('.collapsible')));
+    });
+  }
+
+  /* ---------- search + tag filter ---------- */
+  function matchesFilter(entry){
+    const text = filterState.searchText.trim().toLowerCase();
+    if(text && !(entry.title || '').toLowerCase().includes(text)) return false;
+    if(filterState.tags.size > 0){
+      const cats = entry.categories || [];
+      if(!cats.some(c => filterState.tags.has(c))) return false;
+    }
+    return true;
+  }
+
+  function filteredEntries(){
+    return store.entries.filter(matchesFilter);
+  }
+
+  function updateFilterLabel(){
+    filterToggleLabel.textContent = filterState.tags.size
+      ? filterState.tags.size + ' tag' + (filterState.tags.size === 1 ? '' : 's')
+      : 'All tags';
+  }
+
+  function renderFilterBar(){
+    buildChipRow(filterChipsEl, filterState.tags, null, () => {
+      updateFilterLabel();
+      renderSidebar();
+      renderCenter();
+    }, Infinity);
+    updateFilterLabel();
+  }
+
+  filterToggle.addEventListener('click', () => {
+    filterToggle.classList.toggle('open');
+    filterPanel.classList.toggle('open');
+  });
+  document.addEventListener('click', (e) => {
+    const dropdown = document.getElementById('filter-dropdown');
+    if(!e.composedPath().includes(dropdown)){
+      filterToggle.classList.remove('open');
+      filterPanel.classList.remove('open');
+    }
+  });
+  filterClearBtn.addEventListener('click', () => {
+    filterState.tags.clear();
+    filterState.searchText = '';
+    searchInput.value = '';
+    renderFilterBar();
+    renderSidebar();
+    renderCenter();
+  });
+  searchInput.addEventListener('input', () => {
+    filterState.searchText = searchInput.value;
+    renderSidebar();
+    renderCenter();
+  });
 
   function groupByDate(entries){
     const groups = {};
@@ -456,7 +698,7 @@
     else openCollapsible(headerEl, bodyEl);
   }
   function refreshOpenHeight(bodyEl){
-    if(bodyEl.classList.contains('open')){
+    if(bodyEl && bodyEl.classList.contains('open')){
       bodyEl.style.maxHeight = bodyEl.scrollHeight + 'px';
     }
   }
@@ -464,7 +706,7 @@
   /* ---------- sidebar ---------- */
   function renderSidebar(){
     sidebarScroll.innerHTML = '';
-    const groups = groupByDate(store.entries);
+    const groups = groupByDate(filteredEntries());
     groups.forEach(([key, entries], idx) => {
       const block = document.createElement('div');
       block.className = 'date-block';
@@ -501,27 +743,9 @@
     });
   }
 
-  /* ---------- prompt quicklist ---------- */
-  function renderPromptList(){
-    promptListEl.innerHTML = '';
-    const prompts = store.entries
-      .filter(e => (e.categories || []).includes('PROMPT!'))
-      .sort((a,b) => b.timestamp.localeCompare(a.timestamp));
-    if(prompts.length === 0){
-      promptListEl.innerHTML = '<div class="prompt-empty">No PROMPT! entries yet.</div>';
-      return;
-    }
-    prompts.forEach(e => {
-      const item = document.createElement('button');
-      item.className = 'prompt-item';
-      item.textContent = e.title ? e.title : '(untitled)';
-      item.addEventListener('click', () => selectEntry(e.id));
-      promptListEl.appendChild(item);
-    });
-  }
-
-  /* ---------- category chip rows (shared by add form + edit forms) ---------- */
-  function buildChipRow(container, selectedSet, questionWrapEl){
+  /* ---------- category chip rows (shared by add form + edit forms + filter) ---------- */
+  function buildChipRow(container, selectedSet, questionWrapEl, onChange, maxCount){
+    if(maxCount == null) maxCount = 6;
     container.innerHTML = '';
     Object.keys(store.tags).forEach(name => {
       const btn = document.createElement('button');
@@ -533,7 +757,7 @@
         if(selectedSet.has(name)){
           selectedSet.delete(name);
         } else {
-          if(selectedSet.size >= 6){
+          if(selectedSet.size >= maxCount){
             container.classList.remove('shake');
             void container.offsetWidth;
             container.classList.add('shake');
@@ -541,19 +765,104 @@
           }
           selectedSet.add(name);
         }
-        buildChipRow(container, selectedSet, questionWrapEl);
+        buildChipRow(container, selectedSet, questionWrapEl, onChange, maxCount);
         if(questionWrapEl){
           questionWrapEl.style.display = selectedSet.has('PROMPT!') ? 'none' : '';
         }
         refreshOpenHeight(container.closest('.collapsible'));
+        if(onChange) onChange();
       });
       container.appendChild(btn);
     });
   }
 
+  /* dropdown wrapper around buildChipRow: a toggle button + selected-pills
+     summary, with the chip row itself tucked into a collapsible panel --
+     used by the add-entry form, inline edit forms, and the tag filter. */
+  function buildCategoryDropdownField(container, selectedSet, opts){
+    opts = opts || {};
+    const maxCount = opts.maxCount != null ? opts.maxCount : 6;
+    container.innerHTML = '';
+    container.className = 'dropdown-wrap';
+
+    const toggle = document.createElement('button');
+    toggle.type = 'button';
+    toggle.className = 'dropdown-toggle';
+    toggle.innerHTML = '<span class="dd-label"></span><span class="chev">&#9662;</span>';
+
+    const pills = document.createElement('div');
+    pills.className = 'dropdown-pills';
+
+    const collapsible = document.createElement('div');
+    collapsible.className = 'collapsible';
+    const inner = document.createElement('div');
+    inner.className = 'collapsible-inner';
+    const chipRow = document.createElement('div');
+    chipRow.className = 'chip-row';
+    inner.appendChild(chipRow);
+    collapsible.appendChild(inner);
+
+    function refreshLabel(){
+      const label = toggle.querySelector('.dd-label');
+      label.textContent = selectedSet.size ? selectedSet.size + ' selected' : (opts.placeholder || 'Categories');
+      pills.innerHTML = '';
+      selectedSet.forEach(name => {
+        const p = document.createElement('span');
+        p.className = 'tagchip' + (name === 'PROMPT!' ? ' tagchip-prompt' : '');
+        p.innerHTML = '<span class="swatch" style="background:' + (store.tags[name] || '#ccc') + '"></span>' + name;
+        pills.appendChild(p);
+      });
+      if(opts.questionWrap){
+        opts.questionWrap.style.display = selectedSet.has('PROMPT!') ? 'none' : '';
+      }
+    }
+
+    function rebuildChips(){
+      buildChipRow(chipRow, selectedSet, opts.questionWrap, () => {
+        refreshLabel();
+        refreshOpenHeight(collapsible);
+        const outer = container.closest('.collapsible');
+        if(outer && outer !== collapsible) refreshOpenHeight(outer);
+        if(opts.onChange) opts.onChange();
+      }, maxCount);
+    }
+
+    toggle.addEventListener('click', () => {
+      toggleCollapsible(toggle, collapsible);
+      const outer = container.closest('.collapsible');
+      requestAnimationFrame(() => {
+        if(outer && outer !== collapsible) refreshOpenHeight(outer);
+      });
+    });
+
+    rebuildChips();
+    refreshLabel();
+
+    container.appendChild(toggle);
+    container.appendChild(pills);
+    container.appendChild(collapsible);
+  }
+
+  /* close any open category dropdown (add form / edit form) when clicking outside it */
+  document.addEventListener('click', (e) => {
+    const path = e.composedPath();
+    document.querySelectorAll('.dropdown-wrap').forEach(wrap => {
+      if(path.includes(wrap)) return;
+      const toggle = wrap.querySelector(':scope > .dropdown-toggle');
+      const panel = wrap.querySelector(':scope > .collapsible');
+      if(toggle && panel && panel.classList.contains('open')){
+        closeCollapsible(toggle, panel);
+        const outer = wrap.closest('.collapsible');
+        if(outer && outer !== panel) requestAnimationFrame(() => refreshOpenHeight(outer));
+      }
+    });
+  });
+
   function refreshAddChips(){
-    buildChipRow(addChipsEl, addSelected, questionWrap);
-    questionWrap.style.display = addSelected.has('PROMPT!') ? 'none' : '';
+    buildCategoryDropdownField(addChipsEl, addSelected, {
+      placeholder: 'Categories (up to 6, optional)',
+      questionWrap: questionWrap
+    });
   }
 
   /* ---------- tag manage list ---------- */
@@ -563,6 +872,21 @@
       const chip = document.createElement('span');
       chip.className = 'tagchip' + (name === 'PROMPT!' ? ' tagchip-prompt' : '');
       chip.innerHTML = '<span class="swatch" style="background:' + color + '"></span>' + name;
+      const del = document.createElement('button');
+      del.type = 'button';
+      del.className = 'tagchip-del';
+      del.innerHTML = '&times;';
+      del.title = 'Delete category';
+      del.addEventListener('click', async () => {
+        if(!confirm('Delete category "' + name + '"? It will be removed from all entries.')) return;
+        delete store.tags[name];
+        store.entries.forEach(e => {
+          e.categories = (e.categories || []).filter(c => c !== name);
+        });
+        filterState.tags.delete(name);
+        await commit();
+      });
+      chip.appendChild(del);
       tagListEl.appendChild(chip);
     });
   }
@@ -611,13 +935,19 @@
     const cf = document.createElement('div');
     cf.className = 'field';
     const contentText = entry.content ? entry.content : '';
-    cf.innerHTML = '<label>Content</label><div class="field-text content-text' + (contentText ? '' : ' empty-hint') + '"></div>';
-    cf.querySelector('.field-text').innerHTML = contentText || '(empty — click Edit to fill in)';
+    cf.innerHTML = '<label>Content</label><div class="field-text content-text rendered-content' + (contentText ? '' : ' empty-hint') + '"></div>';
+    const contentEl = cf.querySelector('.field-text');
+    if(contentText){
+      renderMarkdown(contentEl, contentText);
+    } else {
+      contentEl.textContent = '(empty — click Edit to fill in)';
+    }
     bodyInner.appendChild(cf);
 
     const actions = document.createElement('div');
     actions.className = 'entry-actions';
-    actions.innerHTML = '<button class="edit-btn">Edit</button><button class="note-btn">+ Add note</button>';
+    actions.innerHTML = '<button class="edit-btn">Edit</button><button class="expand-btn">Expand</button>'
+      + '<button class="note-btn">+ Add note</button><button class="delete-btn danger">Delete</button>';
     bodyInner.appendChild(actions);
 
     const noteForm = document.createElement('div');
@@ -627,6 +957,12 @@
     bodyInner.appendChild(noteForm);
 
     actions.querySelector('.edit-btn').addEventListener('click', () => enterEditMode(bodyInner, entry, cardEl));
+    actions.querySelector('.expand-btn').addEventListener('click', () => openEntryModal(entry));
+    actions.querySelector('.delete-btn').addEventListener('click', async () => {
+      if(!confirm('Delete this entry?')) return;
+      store.entries = store.entries.filter(e => e.id !== entry.id);
+      await commit();
+    });
     actions.querySelector('.note-btn').addEventListener('click', () => {
       noteForm.hidden = !noteForm.hidden;
       refreshOpenHeight(bodyInner.parentElement);
@@ -662,17 +998,21 @@
     catLabel.innerHTML = 'Categories <span class="hint">(up to 6)</span>';
     bodyInner.appendChild(catLabel);
     const chipsEl = document.createElement('div');
-    chipsEl.className = 'chip-row';
     bodyInner.appendChild(chipsEl);
-    buildChipRow(chipsEl, editSelected, qWrap);
-    qWrap.style.display = editSelected.has('PROMPT!') ? 'none' : '';
+    buildCategoryDropdownField(chipsEl, editSelected, { placeholder: 'Categories', questionWrap: qWrap });
 
     const contentField = document.createElement('div');
-    contentField.innerHTML = '<label>Content</label>';
+    contentField.innerHTML = '<label>Content</label><button type="button" class="expand-edit-btn">Expand</button>';
     const contentInput = document.createElement('textarea');
     contentInput.value = entry.content || '';
     contentField.appendChild(contentInput);
     bodyInner.appendChild(contentField);
+    contentField.querySelector('.expand-edit-btn').addEventListener('click', () => {
+      openEntryModal(entry, {
+        getValue: () => contentInput.value,
+        onSave: (value) => { contentInput.value = value; }
+      });
+    });
 
     const actions = document.createElement('div');
     actions.className = 'entry-actions';
@@ -697,14 +1037,21 @@
 
   function renderCenter(){
     logRoot.innerHTML = '';
-    countEl.textContent = store.entries.length + ' entries';
+    const filtered = filteredEntries();
+    countEl.textContent = (filtered.length === store.entries.length)
+      ? store.entries.length + ' entries'
+      : filtered.length + ' of ' + store.entries.length + ' entries';
 
     if(store.entries.length === 0){
       logRoot.innerHTML = '<div class="prompt-empty">No entries yet — add one from the right panel.</div>';
       return;
     }
+    if(filtered.length === 0){
+      logRoot.innerHTML = '<div class="prompt-empty">No entries match the current search/filter.</div>';
+      return;
+    }
 
-    const groups = groupByDate(store.entries);
+    const groups = groupByDate(filtered);
     groups.forEach(([key, entries]) => {
       const groupWrap = document.createElement('div');
       groupWrap.className = 'date-group';
@@ -810,21 +1157,51 @@
   async function commit(){
     renderSidebar();
     renderCenter();
-    renderPromptList();
     refreshAddChips();
     renderTagManageList();
+    renderFilterBar();
     await saveStore();
   }
 
   function renderAll(){
     renderSidebar();
     renderCenter();
-    renderPromptList();
     refreshAddChips();
     renderTagManageList();
+    renderFilterBar();
   }
 
   /* ---------- add entry form ---------- */
+  const backdateCheckbox = document.getElementById('f-backdate');
+  const backdateFields = document.getElementById('backdate-fields');
+  const backdateDateInput = document.getElementById('f-backdate-date');
+  const backdateHourSelect = document.getElementById('f-backdate-hour');
+
+  for(let h = 0; h < 24; h++){
+    const opt = document.createElement('option');
+    opt.value = String(h);
+    opt.textContent = pad(h) + ':00';
+    backdateHourSelect.appendChild(opt);
+  }
+
+  backdateCheckbox.addEventListener('change', () => {
+    backdateFields.hidden = !backdateCheckbox.checked;
+    if(backdateCheckbox.checked){
+      const now = new Date();
+      if(!backdateDateInput.value){
+        backdateDateInput.value = now.getFullYear() + '-' + pad(now.getMonth()+1) + '-' + pad(now.getDate());
+      }
+      backdateHourSelect.value = String(now.getHours());
+    }
+  });
+
+  function entryTimestamp(){
+    if(backdateCheckbox.checked && backdateDateInput.value){
+      return backdateDateInput.value + 'T' + pad(Number(backdateHourSelect.value)) + ':00:00';
+    }
+    return nowIso();
+  }
+
   document.getElementById('add-entry-btn').addEventListener('click', async () => {
     const titleInput = document.getElementById('f-title');
     const questionInput = document.getElementById('f-question');
@@ -832,7 +1209,7 @@
 
     const entry = {
       id: 'e-' + Date.now() + '-' + Math.floor(Math.random()*1000),
-      timestamp: nowIso(),
+      timestamp: entryTimestamp(),
       title: titleInput.value.trim(),
       question: addSelected.has('PROMPT!') ? '' : questionInput.value.trim(),
       categories: Array.from(addSelected),
@@ -844,6 +1221,8 @@
     questionInput.value = '';
     contentInput.value = '';
     addSelected.clear();
+    backdateCheckbox.checked = false;
+    backdateFields.hidden = true;
 
     await commit();
     selectEntry(entry.id);
@@ -866,6 +1245,65 @@
     const btn = document.getElementById('sidebar-toggle');
     sidebar.classList.toggle('collapsed');
     btn.innerHTML = sidebar.classList.contains('collapsed') ? '&rsaquo;' : '&lsaquo;';
+  });
+
+  /* ---------- expand modal ---------- */
+  let modalState = null;
+  const modalEl = document.getElementById('entry-modal');
+  const modalTitleEl = document.getElementById('modal-title');
+  const modalPreviewEl = document.getElementById('modal-preview');
+  const modalEditorEl = document.getElementById('modal-editor');
+  const modalTabPreview = document.getElementById('modal-tab-preview');
+  const modalTabEdit = document.getElementById('modal-tab-edit');
+
+  function openEntryModal(entry, opts){
+    modalState = { entry, opts: opts || {} };
+    modalTitleEl.textContent = entry.title || '(untitled)';
+    modalEditorEl.value = modalState.opts.getValue ? modalState.opts.getValue() : (entry.content || '');
+    switchModalTab('preview');
+    modalEl.hidden = false;
+  }
+
+  function closeEntryModal(){
+    modalEl.hidden = true;
+    modalState = null;
+  }
+
+  function switchModalTab(tab){
+    if(tab === 'preview'){
+      modalPreviewEl.hidden = false;
+      modalEditorEl.hidden = true;
+      modalTabPreview.classList.add('active');
+      modalTabEdit.classList.remove('active');
+      renderMarkdown(modalPreviewEl, modalEditorEl.value);
+    } else {
+      modalPreviewEl.hidden = true;
+      modalEditorEl.hidden = false;
+      modalTabEdit.classList.add('active');
+      modalTabPreview.classList.remove('active');
+    }
+  }
+
+  modalTabPreview.addEventListener('click', () => switchModalTab('preview'));
+  modalTabEdit.addEventListener('click', () => switchModalTab('edit'));
+  document.getElementById('modal-close').addEventListener('click', closeEntryModal);
+  document.getElementById('modal-cancel').addEventListener('click', closeEntryModal);
+  modalEl.addEventListener('click', (e) => {
+    if(e.target === modalEl) closeEntryModal();
+  });
+  document.getElementById('modal-save').addEventListener('click', async () => {
+    if(!modalState) return;
+    const value = modalEditorEl.value;
+    if(modalState.opts.onSave){
+      modalState.opts.onSave(value);
+      closeEntryModal();
+    } else {
+      const entry = modalState.entry;
+      entry.content = value;
+      closeEntryModal();
+      await commit();
+      selectEntry(entry.id);
+    }
   });
 
   loadStore();

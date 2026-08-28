@@ -1,3 +1,7 @@
 ai_log_data.json
+ai_log_data.legacy.json
+ai_log_meta.json
+ai_log_data_*.json
 *.pyc
 __pycache__/
+.claude/
