@@ -1,0 +1,875 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Log</title>
+<style>
+  :root{
+    --bg: #eef0f3;
+    --surface: #ffffff;
+    --surface-alt: #f5f6f8;
+    --border: #dde1e6;
+    --text: #1b1f24;
+    --text-dim: #5b6470;
+    --text-faint: #98a1ab;
+    --prompt: #ff8a3d;
+    --prompt-soft: rgba(255, 138, 61, 0.16);
+    --sans: "Segoe UI", system-ui, -apple-system, Helvetica, Arial, sans-serif;
+    --display: "Avenir Next", "Century Gothic", "Segoe UI", var(--sans);
+    --mono: ui-monospace, "SFMono-Regular", "IBM Plex Mono", Consolas, monospace;
+  }
+  *{ box-sizing: border-box; }
+  html, body{ height:100%; margin:0; }
+  body{
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    line-height: 1.5;
+  }
+  button, input, textarea, select{ font-family: inherit; }
+
+  .app{
+    display:flex;
+    height:100vh;
+    overflow:hidden;
+  }
+
+  /* ---------- Sidebar ---------- */
+  .sidebar{
+    width: 22%;
+    min-width: 190px;
+    max-width: 280px;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    display:flex;
+    flex-direction:column;
+    transition: width .2s ease, min-width .2s ease;
+    flex-shrink:0;
+  }
+  .sidebar.collapsed{ width: 48px; min-width: 48px; }
+  .sidebar-head{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding: 14px 12px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink:0;
+  }
+  .sidebar-title{
+    font-family: var(--display);
+    font-size: 0.78rem;
+    letter-spacing: 0.08em;
+    color: var(--text-faint);
+    font-weight: 700;
+  }
+  .sidebar.collapsed .sidebar-title{ display:none; }
+  #sidebar-toggle{
+    background:none; border:1px solid var(--border); border-radius:5px;
+    width:26px; height:26px; cursor:pointer; color: var(--text-dim);
+    display:flex; align-items:center; justify-content:center; font-size:0.9rem;
+    flex-shrink:0;
+  }
+  #sidebar-toggle:hover{ background: var(--surface-alt); }
+  .sidebar-scroll{
+    overflow-y:auto;
+    flex:1;
+    padding: 6px 0 20px;
+  }
+  .sidebar.collapsed .sidebar-scroll{ display:none; }
+
+  .collapsible{
+    max-height:0;
+    overflow:hidden;
+    transition: max-height .22s ease;
+  }
+  .collapsible-inner{ padding: 0; }
+
+  .date-row{
+    width:100%;
+    text-align:left;
+    background:none;
+    border:none;
+    cursor:pointer;
+    padding: 8px 14px;
+    font-family: var(--display);
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--text);
+    display:flex;
+    align-items:center;
+    gap:8px;
+    transition: background-color .15s ease;
+  }
+  .date-row:hover{ background: var(--surface-alt); }
+  .date-row .chevron{
+    display:inline-block;
+    font-size: 0.7rem;
+    color: var(--text-faint);
+    transition: transform .2s ease;
+  }
+  .date-row.open .chevron{ transform: rotate(90deg); }
+
+  .title-list{ padding: 2px 0 6px; }
+  .title-row{
+    display:block;
+    width: calc(100% - 14px);
+    margin: 0 0 0 26px;
+    text-align:left;
+    background:none;
+    border:none;
+    border-left: 2px solid var(--border);
+    cursor:pointer;
+    padding: 6px 10px;
+    font-size: 0.8rem;
+    color: var(--text-dim);
+    transition: background-color .15s ease, color .15s ease, border-color .15s ease;
+  }
+  .title-row:hover{
+    background: var(--surface-alt);
+    color: var(--text);
+    border-left-color: var(--text-dim);
+  }
+
+  /* ---------- Center ---------- */
+  .center{
+    flex:1;
+    min-width: 0;
+    overflow-y:auto;
+    padding: 26px 32px 80px;
+  }
+  .center-head{
+    display:flex;
+    align-items:baseline;
+    gap:14px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 14px;
+    margin-bottom: 20px;
+  }
+  .center-head h1{
+    font-family: var(--display);
+    font-size: 1.5rem;
+    margin:0;
+    letter-spacing: -0.01em;
+  }
+  .count{ font-family: var(--mono); font-size: 0.78rem; color: var(--text-faint); }
+  .save-status{ font-family: var(--mono); font-size: 0.75rem; color: var(--text-faint); margin-left:auto; }
+  .save-status.err{ color: #b5453d; }
+  .save-status.ok{ color: #4c8a58; }
+
+  .load-error{
+    background: #fdf1ef; border: 1px solid #f0c9c2; color: #8a3a30;
+    border-radius: 8px; padding: 16px 18px; font-size: 0.88rem;
+  }
+  .load-error code{ background: rgba(0,0,0,0.06); padding: 1px 5px; border-radius: 4px; }
+
+  .date-group{ margin-top: 26px; }
+  .date-group:first-child{ margin-top:0; }
+  .date-head{
+    font-family: var(--display);
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--text-dim);
+    display:flex; align-items:center; gap:10px;
+    margin-bottom: 12px;
+  }
+  .date-head::after{ content:""; flex:1; height:1px; background: var(--border); }
+
+  .entry{
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin-bottom: 12px;
+    overflow:hidden;
+    transition: box-shadow .15s ease, transform .15s ease;
+  }
+  .entry.is-prompt{ box-shadow: 0 0 0 1px var(--prompt), 0 4px 14px var(--prompt-soft); border-color: var(--prompt); }
+
+  .category-stripe{ display:flex; height:4px; }
+  .category-stripe span{ flex:1; }
+  .category-stripe.empty{ background: var(--border); }
+
+  .entry-head{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap: 12px;
+    padding: 12px 16px;
+    cursor:pointer;
+    transition: background-color .15s ease;
+  }
+  .entry-head:hover, .entry.expanded .entry-head{ background: var(--surface-alt); }
+  .entry.flash .entry-head{ animation: flashbg .9s ease; }
+  @keyframes flashbg{
+    0%{ background: var(--prompt-soft); }
+    100%{ background: transparent; }
+  }
+
+  .entry-title{ font-weight: 600; font-size: 0.95rem; }
+  .entry-title.untitled{ color: var(--text-faint); font-style: italic; font-weight: 500; }
+  .entry-meta{ display:flex; align-items:center; gap:10px; flex-shrink:0; }
+  .dots{ display:flex; gap:4px; }
+  .dot{ width:9px; height:9px; border-radius:50%; }
+  .entry-time{ font-family: var(--mono); font-size: 0.72rem; color: var(--text-faint); }
+
+  .entry-body{ padding: 4px 16px 16px; }
+  .field{ margin-bottom: 12px; }
+  .field label{
+    display:block; font-size: 0.68rem; text-transform:uppercase; letter-spacing:0.05em;
+    color: var(--text-faint); margin-bottom: 4px;
+  }
+  .field-text{ font-size: 0.88rem; color: var(--text); white-space: pre-wrap; word-wrap: break-word; }
+  .field-text.content-text{ font-family: var(--mono); font-size: 0.84rem; color: var(--text-dim); }
+  .field-text.empty-hint{ color: var(--text-faint); font-style: italic; }
+
+  .entry-actions{ display:flex; gap:8px; margin-top: 6px; }
+  .entry-actions button{
+    background: var(--surface-alt); border: 1px solid var(--border); border-radius: 5px;
+    padding: 5px 11px; font-size: 0.78rem; cursor:pointer; color: var(--text-dim);
+  }
+  .entry-actions button:hover{ border-color: var(--text-faint); color: var(--text); }
+  .entry-actions button.primary{ background:#e9f1eb; border-color:#bcd9c2; color:#3a6b46; }
+
+  .note-form{ display:flex; gap:8px; margin-top:10px; }
+  .note-form input{ flex:1; }
+  .note-form[hidden]{ display:none; }
+
+  /* ---------- form fields (shared: add panel + edit forms) ---------- */
+  label{
+    display:block; font-size: 0.72rem; text-transform:uppercase; letter-spacing:0.05em;
+    color: var(--text-faint); margin: 10px 0 4px;
+  }
+  input[type=text], input:not([type]), textarea{
+    width:100%;
+    background: var(--surface-alt);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    color: var(--text);
+    font-size: 0.88rem;
+    padding: 7px 10px;
+  }
+  input[type=text]:focus, input:not([type]):focus, textarea:focus{ outline: 2px solid #b8c6d9; outline-offset:1px; }
+  textarea{ min-height: 80px; resize: vertical; font-family: var(--mono); font-size: 0.83rem; }
+  input[type=color]{
+    width: 40px; height: 30px; padding: 2px;
+    background: var(--surface-alt); border: 1px solid var(--border); border-radius: 5px;
+    flex-shrink:0;
+  }
+
+  .chip-row{ display:flex; flex-wrap:wrap; gap:6px; margin-top:4px; }
+  .chip{
+    display:flex; align-items:center; gap:6px;
+    font-size: 0.78rem;
+    background: var(--surface-alt);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 4px 11px 4px 7px;
+    cursor:pointer;
+    color: var(--text-dim);
+    transition: border-color .15s ease, background-color .15s ease;
+  }
+  .chip .swatch{ width:9px; height:9px; border-radius:50%; flex-shrink:0; }
+  .chip.selected{ background:#eef2f6; border-color:#9fb3c8; color: var(--text); font-weight:600; }
+  .chip.chip-prompt.selected{ background: var(--prompt-soft); border-color: var(--prompt); color:#a85a1f; }
+  .chip:hover{ border-color: var(--text-faint); }
+  .chip-row.shake{ animation: shake .3s ease; }
+  @keyframes shake{
+    0%,100%{ transform: translateX(0); }
+    25%{ transform: translateX(-4px); }
+    75%{ transform: translateX(4px); }
+  }
+  .hint{ text-transform:none; letter-spacing:0; color: var(--text-faint); font-size:0.68rem; }
+
+  /* ---------- Right panel ---------- */
+  .rightpanel{
+    width: 27%;
+    min-width: 300px;
+    max-width: 380px;
+    border-left: 1px solid var(--border);
+    background: var(--surface);
+    overflow-y:auto;
+    flex-shrink:0;
+    padding-bottom: 40px;
+  }
+  .panel{ border-bottom: 1px solid var(--border); padding: 16px 18px; }
+  .panel h2{
+    font-family: var(--display);
+    font-size: 0.82rem;
+    letter-spacing: 0.04em;
+    margin: 0 0 4px;
+    display:flex; align-items:center; gap:8px;
+  }
+  .prompt-badge{
+    font-family: var(--mono); font-size:0.62rem; color: var(--prompt);
+    border: 1px solid var(--prompt); border-radius: 10px; padding: 1px 7px;
+    text-transform:none; letter-spacing:0;
+  }
+  #prompt-list{ margin-top: 10px; max-height: 220px; overflow-y:auto; }
+  .prompt-item{
+    display:block; width:100%; text-align:left;
+    background: var(--prompt-soft); border: 1px solid transparent; border-radius:6px;
+    padding: 7px 10px; margin-bottom:6px; font-size: 0.82rem; color:#8a4a1c; cursor:pointer;
+    transition: border-color .15s ease;
+  }
+  .prompt-item:hover{ border-color: var(--prompt); }
+  .prompt-empty{ font-size: 0.8rem; color: var(--text-faint); font-style: italic; }
+
+  #add-entry-btn{ margin-top: 14px; width:100%; }
+  button.primary{
+    background:#e9f1eb; border: 1px solid #bcd9c2; color:#3a6b46;
+    border-radius: 6px; padding: 9px 14px; font-size: 0.88rem; cursor:pointer; font-weight:600;
+  }
+  button.primary:hover{ border-color:#3a6b46; }
+  button{ background: var(--surface-alt); border:1px solid var(--border); border-radius:6px; padding:8px 13px; font-size:0.85rem; cursor:pointer; color: var(--text); }
+  button:hover{ border-color: var(--text-faint); }
+
+  .tag-list{ display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
+  .tagchip{
+    display:flex; align-items:center; gap:6px;
+    font-family: var(--mono); font-size: 0.72rem;
+    border: 1px solid var(--border); border-radius: 20px; padding: 3px 10px 3px 6px;
+    color: var(--text-dim);
+  }
+  .tagchip.tagchip-prompt{ border-color: var(--prompt); color:#a85a1f; }
+  .tagchip .swatch{ width:8px; height:8px; border-radius:50%; }
+  .row{ display:flex; gap:8px; align-items:center; }
+  .row input[type=text]{ flex:1; }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-head">
+      <span class="sidebar-title">LOG INDEX</span>
+      <button id="sidebar-toggle" aria-label="Toggle sidebar">&lsaquo;</button>
+    </div>
+    <div class="sidebar-scroll" id="sidebar-scroll"></div>
+  </nav>
+
+  <main class="center">
+    <div class="center-head">
+      <h1>AI Log</h1>
+      <span class="count" id="entry-count"></span>
+      <span class="save-status" id="save-status">Connecting&hellip;</span>
+    </div>
+    <div id="log-root"></div>
+  </main>
+
+  <aside class="rightpanel">
+    <section class="panel">
+      <h2>PROMPT! <span class="prompt-badge">quick list</span></h2>
+      <div id="prompt-list"></div>
+    </section>
+
+    <section class="panel">
+      <h2>Add entry</h2>
+      <label for="f-title">Title <span class="hint">(optional)</span></label>
+      <input type="text" id="f-title" placeholder="Short heading">
+
+      <div id="question-wrap">
+        <label for="f-question">Question <span class="hint">(optional)</span></label>
+        <input type="text" id="f-question" placeholder="What was asked">
+      </div>
+
+      <label>Categories <span class="hint">(up to 6, optional)</span></label>
+      <div class="chip-row" id="add-chips"></div>
+
+      <label for="f-content">Content <span class="hint">(optional)</span></label>
+      <textarea id="f-content" placeholder="Log content..."></textarea>
+
+      <button class="primary" id="add-entry-btn">Add entry</button>
+    </section>
+
+    <section class="panel">
+      <h2>Manage categories</h2>
+      <div class="row">
+        <input type="text" id="t-name" placeholder="name">
+        <input type="color" id="t-color" value="#6c8ebf">
+        <button id="add-tag-btn">Save</button>
+      </div>
+      <div class="tag-list" id="tag-list"></div>
+    </section>
+  </aside>
+
+</div>
+
+<script>
+(function(){
+
+  let store = { tags: {}, entries: [] };
+  const addSelected = new Set();
+
+  const sidebarScroll = document.getElementById('sidebar-scroll');
+  const logRoot = document.getElementById('log-root');
+  const promptListEl = document.getElementById('prompt-list');
+  const addChipsEl = document.getElementById('add-chips');
+  const tagListEl = document.getElementById('tag-list');
+  const questionWrap = document.getElementById('question-wrap');
+  const statusEl = document.getElementById('save-status');
+  const countEl = document.getElementById('entry-count');
+
+  function pad(n){ return String(n).padStart(2,'0'); }
+
+  function nowIso(){
+    const d = new Date();
+    return d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate())
+      + 'T' + pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
+  }
+
+  function dateKey(ts){ return ts.slice(0,10); }
+
+  function formatDateHead(key){
+    const d = new Date(key + 'T00:00:00');
+    return d.toLocaleDateString(undefined, { year:'numeric', month:'long', day:'numeric' });
+  }
+
+  function formatTime(ts){
+    const d = new Date(ts);
+    return d.toLocaleTimeString(undefined, { hour:'2-digit', minute:'2-digit' });
+  }
+
+  function groupByDate(entries){
+    const groups = {};
+    entries.forEach(e => {
+      const k = dateKey(e.timestamp);
+      (groups[k] = groups[k] || []).push(e);
+    });
+    const keys = Object.keys(groups).sort().reverse();
+    return keys.map(k => [k, groups[k].slice().sort((a,b) => b.timestamp.localeCompare(a.timestamp))]);
+  }
+
+  /* generic accordion helpers, shared by sidebar date-groups and entry bodies */
+  function openCollapsible(headerEl, bodyEl){
+    headerEl.classList.add('open');
+    bodyEl.classList.add('open');
+    bodyEl.style.maxHeight = bodyEl.scrollHeight + 'px';
+  }
+  function closeCollapsible(headerEl, bodyEl){
+    bodyEl.style.maxHeight = bodyEl.scrollHeight + 'px';
+    requestAnimationFrame(() => { bodyEl.style.maxHeight = '0px'; });
+    headerEl.classList.remove('open');
+    bodyEl.classList.remove('open');
+  }
+  function toggleCollapsible(headerEl, bodyEl){
+    if(bodyEl.classList.contains('open')) closeCollapsible(headerEl, bodyEl);
+    else openCollapsible(headerEl, bodyEl);
+  }
+  function refreshOpenHeight(bodyEl){
+    if(bodyEl.classList.contains('open')){
+      bodyEl.style.maxHeight = bodyEl.scrollHeight + 'px';
+    }
+  }
+
+  /* ---------- sidebar ---------- */
+  function renderSidebar(){
+    sidebarScroll.innerHTML = '';
+    const groups = groupByDate(store.entries);
+    groups.forEach(([key, entries], idx) => {
+      const block = document.createElement('div');
+      block.className = 'date-block';
+
+      const row = document.createElement('button');
+      row.className = 'date-row';
+      row.innerHTML = '<span class="chevron">&rsaquo;</span><span></span>';
+      row.querySelector('span:last-child').textContent = formatDateHead(key);
+
+      const collapsible = document.createElement('div');
+      collapsible.className = 'collapsible';
+      const inner = document.createElement('div');
+      inner.className = 'collapsible-inner title-list';
+
+      entries.forEach(e => {
+        const tRow = document.createElement('button');
+        tRow.className = 'title-row';
+        tRow.textContent = e.title ? e.title : '(untitled)';
+        tRow.addEventListener('click', () => selectEntry(e.id));
+        inner.appendChild(tRow);
+      });
+
+      collapsible.appendChild(inner);
+      row.addEventListener('click', () => toggleCollapsible(row, collapsible));
+
+      block.appendChild(row);
+      block.appendChild(collapsible);
+      sidebarScroll.appendChild(block);
+
+      if(idx === 0){
+        // auto-open the most recent date group
+        openCollapsible(row, collapsible);
+      }
+    });
+  }
+
+  /* ---------- prompt quicklist ---------- */
+  function renderPromptList(){
+    promptListEl.innerHTML = '';
+    const prompts = store.entries
+      .filter(e => (e.categories || []).includes('PROMPT!'))
+      .sort((a,b) => b.timestamp.localeCompare(a.timestamp));
+    if(prompts.length === 0){
+      promptListEl.innerHTML = '<div class="prompt-empty">No PROMPT! entries yet.</div>';
+      return;
+    }
+    prompts.forEach(e => {
+      const item = document.createElement('button');
+      item.className = 'prompt-item';
+      item.textContent = e.title ? e.title : '(untitled)';
+      item.addEventListener('click', () => selectEntry(e.id));
+      promptListEl.appendChild(item);
+    });
+  }
+
+  /* ---------- category chip rows (shared by add form + edit forms) ---------- */
+  function buildChipRow(container, selectedSet, questionWrapEl){
+    container.innerHTML = '';
+    Object.keys(store.tags).forEach(name => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      const isPrompt = name === 'PROMPT!';
+      btn.className = 'chip' + (selectedSet.has(name) ? ' selected' : '') + (isPrompt ? ' chip-prompt' : '');
+      btn.innerHTML = '<span class="swatch" style="background:' + store.tags[name] + '"></span>' + name;
+      btn.addEventListener('click', () => {
+        if(selectedSet.has(name)){
+          selectedSet.delete(name);
+        } else {
+          if(selectedSet.size >= 6){
+            container.classList.remove('shake');
+            void container.offsetWidth;
+            container.classList.add('shake');
+            return;
+          }
+          selectedSet.add(name);
+        }
+        buildChipRow(container, selectedSet, questionWrapEl);
+        if(questionWrapEl){
+          questionWrapEl.style.display = selectedSet.has('PROMPT!') ? 'none' : '';
+        }
+        refreshOpenHeight(container.closest('.collapsible'));
+      });
+      container.appendChild(btn);
+    });
+  }
+
+  function refreshAddChips(){
+    buildChipRow(addChipsEl, addSelected, questionWrap);
+    questionWrap.style.display = addSelected.has('PROMPT!') ? 'none' : '';
+  }
+
+  /* ---------- tag manage list ---------- */
+  function renderTagManageList(){
+    tagListEl.innerHTML = '';
+    Object.entries(store.tags).forEach(([name, color]) => {
+      const chip = document.createElement('span');
+      chip.className = 'tagchip' + (name === 'PROMPT!' ? ' tagchip-prompt' : '');
+      chip.innerHTML = '<span class="swatch" style="background:' + color + '"></span>' + name;
+      tagListEl.appendChild(chip);
+    });
+  }
+
+  /* ---------- entry cards (center) ---------- */
+  function categoryStripe(categories){
+    const stripe = document.createElement('div');
+    if(!categories || categories.length === 0){
+      stripe.className = 'category-stripe empty';
+      return stripe;
+    }
+    stripe.className = 'category-stripe';
+    categories.forEach(name => {
+      const seg = document.createElement('span');
+      seg.style.background = store.tags[name] || '#ccc';
+      stripe.appendChild(seg);
+    });
+    return stripe;
+  }
+
+  function categoryDots(categories){
+    const wrap = document.createElement('div');
+    wrap.className = 'dots';
+    (categories || []).forEach(name => {
+      const d = document.createElement('span');
+      d.className = 'dot';
+      d.title = name;
+      d.style.background = store.tags[name] || '#ccc';
+      wrap.appendChild(d);
+    });
+    return wrap;
+  }
+
+  function renderViewBody(bodyInner, entry, cardEl){
+    bodyInner.innerHTML = '';
+    bodyInner.className = 'collapsible-inner entry-body';
+
+    if(entry.question){
+      const qf = document.createElement('div');
+      qf.className = 'field';
+      qf.innerHTML = '<label>Question</label><div class="field-text"></div>';
+      qf.querySelector('.field-text').textContent = entry.question;
+      bodyInner.appendChild(qf);
+    }
+
+    const cf = document.createElement('div');
+    cf.className = 'field';
+    const contentText = entry.content ? entry.content : '';
+    cf.innerHTML = '<label>Content</label><div class="field-text content-text' + (contentText ? '' : ' empty-hint') + '"></div>';
+    cf.querySelector('.field-text').innerHTML = contentText || '(empty — click Edit to fill in)';
+    bodyInner.appendChild(cf);
+
+    const actions = document.createElement('div');
+    actions.className = 'entry-actions';
+    actions.innerHTML = '<button class="edit-btn">Edit</button><button class="note-btn">+ Add note</button>';
+    bodyInner.appendChild(actions);
+
+    const noteForm = document.createElement('div');
+    noteForm.className = 'note-form';
+    noteForm.hidden = true;
+    noteForm.innerHTML = '<input type="text" class="note-input" placeholder="Quick note..."><button class="note-submit">Add</button>';
+    bodyInner.appendChild(noteForm);
+
+    actions.querySelector('.edit-btn').addEventListener('click', () => enterEditMode(bodyInner, entry, cardEl));
+    actions.querySelector('.note-btn').addEventListener('click', () => {
+      noteForm.hidden = !noteForm.hidden;
+      refreshOpenHeight(bodyInner.parentElement);
+    });
+    noteForm.querySelector('.note-submit').addEventListener('click', async () => {
+      const text = noteForm.querySelector('.note-input').value.trim();
+      if(!text) return;
+      entry.content = (entry.content ? entry.content + '\n\n' : '') + '[' + formatTime(nowIso()) + '] ' + text;
+      await commit();
+      selectEntry(entry.id);
+    });
+  }
+
+  function enterEditMode(bodyInner, entry, cardEl){
+    bodyInner.innerHTML = '';
+    const editSelected = new Set(entry.categories || []);
+
+    const titleField = document.createElement('div');
+    titleField.innerHTML = '<label>Title</label>';
+    const titleInput = document.createElement('input');
+    titleInput.type = 'text'; titleInput.value = entry.title || '';
+    titleField.appendChild(titleInput);
+    bodyInner.appendChild(titleField);
+
+    const qWrap = document.createElement('div');
+    qWrap.innerHTML = '<label>Question</label>';
+    const qInput = document.createElement('input');
+    qInput.type = 'text'; qInput.value = entry.question || '';
+    qWrap.appendChild(qInput);
+    bodyInner.appendChild(qWrap);
+
+    const catLabel = document.createElement('label');
+    catLabel.innerHTML = 'Categories <span class="hint">(up to 6)</span>';
+    bodyInner.appendChild(catLabel);
+    const chipsEl = document.createElement('div');
+    chipsEl.className = 'chip-row';
+    bodyInner.appendChild(chipsEl);
+    buildChipRow(chipsEl, editSelected, qWrap);
+    qWrap.style.display = editSelected.has('PROMPT!') ? 'none' : '';
+
+    const contentField = document.createElement('div');
+    contentField.innerHTML = '<label>Content</label>';
+    const contentInput = document.createElement('textarea');
+    contentInput.value = entry.content || '';
+    contentField.appendChild(contentInput);
+    bodyInner.appendChild(contentField);
+
+    const actions = document.createElement('div');
+    actions.className = 'entry-actions';
+    actions.innerHTML = '<button class="save-btn primary">Save</button><button class="cancel-btn">Cancel</button>';
+    bodyInner.appendChild(actions);
+
+    actions.querySelector('.save-btn').addEventListener('click', async () => {
+      entry.title = titleInput.value.trim();
+      entry.question = editSelected.has('PROMPT!') ? '' : qInput.value.trim();
+      entry.categories = Array.from(editSelected);
+      entry.content = contentInput.value;
+      await commit();
+      selectEntry(entry.id);
+    });
+    actions.querySelector('.cancel-btn').addEventListener('click', () => {
+      renderViewBody(bodyInner, entry, cardEl);
+      refreshOpenHeight(bodyInner.parentElement);
+    });
+
+    refreshOpenHeight(bodyInner.parentElement);
+  }
+
+  function renderCenter(){
+    logRoot.innerHTML = '';
+    countEl.textContent = store.entries.length + ' entries';
+
+    if(store.entries.length === 0){
+      logRoot.innerHTML = '<div class="prompt-empty">No entries yet — add one from the right panel.</div>';
+      return;
+    }
+
+    const groups = groupByDate(store.entries);
+    groups.forEach(([key, entries]) => {
+      const groupWrap = document.createElement('div');
+      groupWrap.className = 'date-group';
+      const head = document.createElement('div');
+      head.className = 'date-head';
+      head.textContent = formatDateHead(key);
+      groupWrap.appendChild(head);
+
+      entries.forEach(entry => {
+        const card = document.createElement('div');
+        card.className = 'entry' + ((entry.categories || []).includes('PROMPT!') ? ' is-prompt' : '');
+        card.id = 'entry-' + entry.id;
+
+        card.appendChild(categoryStripe(entry.categories));
+
+        const headRow = document.createElement('div');
+        headRow.className = 'entry-head';
+        const titleEl = document.createElement('div');
+        titleEl.className = 'entry-title' + (entry.title ? '' : ' untitled');
+        titleEl.textContent = entry.title ? entry.title : '(untitled)';
+        const metaEl = document.createElement('div');
+        metaEl.className = 'entry-meta';
+        metaEl.appendChild(categoryDots(entry.categories));
+        const timeEl = document.createElement('span');
+        timeEl.className = 'entry-time';
+        timeEl.textContent = formatTime(entry.timestamp);
+        metaEl.appendChild(timeEl);
+        headRow.appendChild(titleEl);
+        headRow.appendChild(metaEl);
+
+        const collapsible = document.createElement('div');
+        collapsible.className = 'collapsible';
+        const bodyInner = document.createElement('div');
+        bodyInner.className = 'collapsible-inner entry-body';
+        collapsible.appendChild(bodyInner);
+        renderViewBody(bodyInner, entry, card);
+
+        headRow.addEventListener('click', () => {
+          toggleCollapsible(headRow, collapsible);
+          card.classList.toggle('expanded');
+        });
+
+        card.appendChild(headRow);
+        card.appendChild(collapsible);
+        groupWrap.appendChild(card);
+      });
+
+      logRoot.appendChild(groupWrap);
+    });
+  }
+
+  function selectEntry(id){
+    const card = document.getElementById('entry-' + id);
+    if(!card) return;
+    const head = card.querySelector('.entry-head');
+    const body = card.querySelector('.collapsible');
+    if(!body.classList.contains('open')){
+      openCollapsible(head, body);
+      card.classList.add('expanded');
+    }
+    card.scrollIntoView({behavior:'smooth', block:'center'});
+    card.classList.remove('flash');
+    void card.offsetWidth;
+    card.classList.add('flash');
+  }
+
+  /* ---------- server sync ---------- */
+  async function loadStore(){
+    try{
+      const res = await fetch('/api/log');
+      if(!res.ok) throw new Error('server responded ' + res.status);
+      store = await res.json();
+      statusEl.textContent = 'Saved';
+      statusEl.className = 'save-status ok';
+      renderAll();
+    }catch(err){
+      logRoot.innerHTML = '<div class="load-error">Could not reach the log server.<br>'
+        + 'Make sure <code>server.py</code> is running and you opened this page as '
+        + '<code>http://localhost:8420</code> — not by double-clicking the file.</div>';
+      statusEl.textContent = 'Not connected';
+      statusEl.className = 'save-status err';
+    }
+  }
+
+  async function saveStore(){
+    statusEl.textContent = 'Saving\u2026';
+    statusEl.className = 'save-status';
+    try{
+      const res = await fetch('/api/log', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(store)
+      });
+      if(!res.ok) throw new Error('save failed');
+      statusEl.textContent = 'Saved';
+      statusEl.className = 'save-status ok';
+    }catch(err){
+      statusEl.textContent = 'Save failed — is the server running?';
+      statusEl.className = 'save-status err';
+    }
+  }
+
+  async function commit(){
+    renderSidebar();
+    renderCenter();
+    renderPromptList();
+    refreshAddChips();
+    renderTagManageList();
+    await saveStore();
+  }
+
+  function renderAll(){
+    renderSidebar();
+    renderCenter();
+    renderPromptList();
+    refreshAddChips();
+    renderTagManageList();
+  }
+
+  /* ---------- add entry form ---------- */
+  document.getElementById('add-entry-btn').addEventListener('click', async () => {
+    const titleInput = document.getElementById('f-title');
+    const questionInput = document.getElementById('f-question');
+    const contentInput = document.getElementById('f-content');
+
+    const entry = {
+      id: 'e-' + Date.now() + '-' + Math.floor(Math.random()*1000),
+      timestamp: nowIso(),
+      title: titleInput.value.trim(),
+      question: addSelected.has('PROMPT!') ? '' : questionInput.value.trim(),
+      categories: Array.from(addSelected),
+      content: contentInput.value
+    };
+    store.entries.push(entry);
+
+    titleInput.value = '';
+    questionInput.value = '';
+    contentInput.value = '';
+    addSelected.clear();
+
+    await commit();
+    selectEntry(entry.id);
+  });
+
+  /* ---------- tag management ---------- */
+  document.getElementById('add-tag-btn').addEventListener('click', async () => {
+    const nameInput = document.getElementById('t-name');
+    const colorInput = document.getElementById('t-color');
+    const name = nameInput.value.trim();
+    if(!name) return;
+    store.tags[name] = colorInput.value;
+    nameInput.value = '';
+    await commit();
+  });
+
+  /* ---------- sidebar collapse toggle ---------- */
+  document.getElementById('sidebar-toggle').addEventListener('click', () => {
+    const sidebar = document.getElementById('sidebar');
+    const btn = document.getElementById('sidebar-toggle');
+    sidebar.classList.toggle('collapsed');
+    btn.innerHTML = sidebar.classList.contains('collapsed') ? '&rsaquo;' : '&lsaquo;';
+  });
+
+  loadStore();
+})();
+</script>
+</body>
+</html>
