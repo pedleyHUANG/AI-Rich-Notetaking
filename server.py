@@ -121,6 +121,15 @@ def make_handler(data_dir: Path, html_path: Path, root_dir: Path):
             if self.path.startswith('/api/'):
                 print(f'{self.address_string()} {fmt % args}')
 
+        def handle_one_request(self):
+            # A client that disconnects mid-response (closed tab, cancelled
+            # fetch) raises BrokenPipeError/ConnectionResetError from wfile
+            # writes -- that's normal and not worth a scary traceback.
+            try:
+                super().handle_one_request()
+            except (BrokenPipeError, ConnectionResetError):
+                pass
+
     return Handler
 
 
