@@ -23,6 +23,7 @@ Commands:
     log.py tag    <name> <#hexcolor>
     log.py rmtag  <name>
     log.py list   [--category C] [--prompt-only]
+    log.py show   <id>
 
 All fields on `add` are optional -- you can log a bare placeholder and
 fill in the rest later with `edit`. If --content is omitted on `add`
@@ -35,6 +36,7 @@ from datetime import datetime
 from pathlib import Path
 
 import store_io
+import text_format
 
 DEFAULT_DIR = '.'
 MAX_CATEGORIES = 6
@@ -176,6 +178,23 @@ def cmd_list(args):
         print(f'{e["timestamp"]}  [{cats}]  {title}  id={e["id"]}')
 
 
+def cmd_show(args):
+    directory = Path(args.dir)
+    store = load_store(directory)
+
+    entry = next((e for e in store['entries'] if e['id'] == args.id), None)
+    if entry is None:
+        sys.exit(f'No entry with id "{args.id}". Use `log.py list` to see ids.')
+
+    cats = ','.join(entry.get('categories', [])) or '-'
+    print(f'{entry["timestamp"]}  [{cats}]  id={entry["id"]}')
+    print(f'Title: {entry["title"] or "(untitled)"}')
+    if entry.get('question'):
+        print(f'Question: {text_format.clean_display_text(entry["question"])}')
+    print('Content:')
+    print(text_format.clean_display_text(entry.get('content', '')) or '(empty)')
+
+
 def build_parser():
     parser = argparse.ArgumentParser(description="Command-line editor for the AI Log's data")
     parser.add_argument('--dir', default=DEFAULT_DIR, help=f'directory holding the log data files (default: {DEFAULT_DIR})')
@@ -214,6 +233,10 @@ def build_parser():
     p_list.add_argument('--category', default=None)
     p_list.add_argument('--prompt-only', action='store_true')
     p_list.set_defaults(func=cmd_list)
+
+    p_show = sub.add_parser('show', help='print one entry in full, with display-only text cleanup applied')
+    p_show.add_argument('id')
+    p_show.set_defaults(func=cmd_show)
 
     return parser
 

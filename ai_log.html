@@ -575,6 +575,18 @@
   }
 
   /* ---------- markdown / code / LaTeX rendering ---------- */
+
+  /* Display-only cleanup, mirrors text_format.py's strip_stray_asterisk_lines
+     -- drops any line that is just a lone "*" (some pasted sources, e.g.
+     Gemini output, wrap a bullet list in one of these before and after it,
+     possibly more than once in the same entry). Never touches the stored
+     data, only what's shown. */
+  function stripStrayAsteriskLines(text){
+    if(!text) return text;
+    const isLoneAsterisk = line => /^[ \t]*\*[ \t]*$/.test(line);
+    return text.split('\n').filter(line => !isLoneAsterisk(line)).join('\n');
+  }
+
   let markedConfigured = false;
   function configureMarked(){
     if(markedConfigured) return;
@@ -598,7 +610,7 @@
 
   function renderMarkdown(el, text){
     configureMarked();
-    const rawHtml = marked.parse(text || '');
+    const rawHtml = marked.parse(stripStrayAsteriskLines(text || ''));
     el.innerHTML = window.DOMPurify ? DOMPurify.sanitize(rawHtml, { ADD_ATTR: ['target'] }) : rawHtml;
     if(window.renderMathInElement){
       renderMathInElement(el, {
