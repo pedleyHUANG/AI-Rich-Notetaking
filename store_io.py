@@ -19,10 +19,22 @@ If no meta file exists yet but a legacy combined ai_log_data.json
 automatically: its entries become the first shard, a meta file is written,
 and the legacy file is renamed to ai_log_data.legacy.json (kept, not
 deleted).
+
+load_full_store()/save_full_store() read and write the whole document and
+are used for full reads (GET /api/log) and by log.py, which always reloads
+fresh right before each save. server.py's per-entry API instead uses the
+targeted upsert_entry()/delete_entry()/upsert_tag()/delete_tag() functions
+below, which touch only the one shard (or the meta file) a change affects,
+so a stale or partial client-side copy can't clobber unrelated entries. A
+module-level lock serializes these targeted writes against concurrent
+requests within one server process.
 """
 
 import json
+import threading
 from pathlib import Path
+
+_LOCK = threading.Lock()
 
 META_FILENAME = 'ai_log_meta.json'
 LEGACY_FILENAME = 'ai_log_data.json'
@@ -130,3 +142,88 @@ def save_full_store(directory: Path, store: dict) -> None:
     meta['tags'] = store.get('tags', {})
     meta['shards'] = shard_names
     _write_json(directory / META_FILENAME, meta)
+
+
+def _find_entry_shard(directory: Path, meta: dict, entry_id: str):
+    """Return (shard_name, entries) for the shard currently holding entry_id, or (None, None)."""
+    for shard_name in meta['shards']:
+        shard = _read_json(directory / shard_name, {'entries': []})
+        entries = shard.get('entries', [])
+        if any(e['id'] == entry_id for e in entries):
+            return shard_name, entries
+    return None, None
+
+
+def upsert_entry(directory: Path, entry: dict) -> None:
+    """Add a new entry or update an existing one, touching only the one
+    shard file the entry lives (or will live) in."""
+    with _LOCK:
+        meta = _load_meta(directory)
+        shard_name, entries = _find_entry_shard(directory, meta, entry['id'])
+
+        if shard_name is not None:
+            entries = [entry if e['id'] == entry['id'] else e for e in entries]
+            _write_json(directory / shard_name, {'entries': entries})
+            return
+
+        shard_size = meta.get('shard_size', DEFAULT_SHARD_SIZE)
+        shard_names = meta['shards']
+        last_shard = shard_names[-1]
+        last_entries = _read_json(directory / last_shard, {'entries': []}).get('entries', [])
+
+        if len(last_entries) >= shard_size:
+            last_shard = _shard_name(len(shard_names) + 1)
+            shard_names.append(last_shard)
+            last_entries = []
+            meta['shards'] = shard_names
+            _write_json(directory / META_FILENAME, meta)
+
+        last_entries.append(entry)
+        _write_json(directory / last_shard, {'entries': last_entries})
+
+
+def delete_entry(directory: Path, entry_id: str) -> bool:
+    """Remove an entry by id, touching only the shard it lived in. Returns
+    False if no shard contained that id."""
+    with _LOCK:
+        meta = _load_meta(directory)
+        shard_name, entries = _find_entry_shard(directory, meta, entry_id)
+        if shard_name is None:
+            return False
+
+        entries = [e for e in entries if e['id'] != entry_id]
+        _write_json(directory / shard_name, {'entries': entries})
+        return True
+
+
+def upsert_tag(directory: Path, name: str, color: str) -> None:
+    """Add or update a category color, touching only the meta file."""
+    with _LOCK:
+        meta = _load_meta(directory)
+        meta['tags'][name] = color
+        _write_json(directory / META_FILENAME, meta)
+
+
+def delete_tag(directory: Path, name: str) -> bool:
+    """Remove a category and strip it from every entry's categories list.
+    Returns False if the category didn't exist."""
+    with _LOCK:
+        meta = _load_meta(directory)
+        if name not in meta['tags']:
+            return False
+
+        del meta['tags'][name]
+        _write_json(directory / META_FILENAME, meta)
+
+        for shard_name in meta['shards']:
+            shard = _read_json(directory / shard_name, {'entries': []})
+            entries = shard.get('entries', [])
+            changed = False
+            for entry in entries:
+                categories = entry.get('categories', [])
+                if name in categories:
+                    entry['categories'] = [c for c in categories if c != name]
+                    changed = True
+            if changed:
+                _write_json(directory / shard_name, {'entries': entries})
+        return True

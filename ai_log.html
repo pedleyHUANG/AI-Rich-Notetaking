@@ -896,7 +896,7 @@
           e.categories = (e.categories || []).filter(c => c !== name);
         });
         filterState.tags.delete(name);
-        await commit();
+        await commit(() => deleteTagRemote(name));
       });
       chip.appendChild(del);
       tagListEl.appendChild(chip);
@@ -973,7 +973,7 @@
     actions.querySelector('.delete-btn').addEventListener('click', async () => {
       if(!confirm('Delete this entry?')) return;
       store.entries = store.entries.filter(e => e.id !== entry.id);
-      await commit();
+      await commit(() => deleteEntryRemote(entry.id));
     });
     actions.querySelector('.note-btn').addEventListener('click', () => {
       noteForm.hidden = !noteForm.hidden;
@@ -983,7 +983,7 @@
       const text = noteForm.querySelector('.note-input').value.trim();
       if(!text) return;
       entry.content = (entry.content ? entry.content + '\n\n' : '') + '[' + formatTime(nowIso()) + '] ' + text;
-      await commit();
+      await commit(() => saveEntry(entry));
       selectEntry(entry.id);
     });
   }
@@ -1036,7 +1036,7 @@
       entry.question = editSelected.has('PROMPT!') ? '' : qInput.value.trim();
       entry.categories = Array.from(editSelected);
       entry.content = contentInput.value;
-      await commit();
+      await commit(() => saveEntry(entry));
       selectEntry(entry.id);
     });
     actions.querySelector('.cancel-btn').addEventListener('click', () => {
@@ -1148,14 +1148,14 @@
     }
   }
 
-  async function saveStore(){
+  async function postJSON(path, body){
     statusEl.textContent = 'Saving\u2026';
     statusEl.className = 'save-status';
     try{
-      const res = await fetch('/api/log', {
+      const res = await fetch(path, {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify(store)
+        body: JSON.stringify(body)
       });
       if(!res.ok) throw new Error('save failed');
       statusEl.textContent = 'Saved';
@@ -1166,13 +1166,29 @@
     }
   }
 
-  async function commit(){
+  async function saveEntry(entry){
+    await postJSON('/api/log/entry', entry);
+  }
+
+  async function deleteEntryRemote(id){
+    await postJSON('/api/log/entry/delete', {id});
+  }
+
+  async function saveTag(name, color){
+    await postJSON('/api/log/tag', {name, color});
+  }
+
+  async function deleteTagRemote(name){
+    await postJSON('/api/log/tag/delete', {name});
+  }
+
+  async function commit(persist){
     renderSidebar();
     renderCenter();
     refreshAddChips();
     renderTagManageList();
     renderFilterBar();
-    await saveStore();
+    await persist();
   }
 
   function renderAll(){
@@ -1236,7 +1252,7 @@
     backdateCheckbox.checked = false;
     backdateFields.hidden = true;
 
-    await commit();
+    await commit(() => saveEntry(entry));
     selectEntry(entry.id);
   });
 
@@ -1248,7 +1264,7 @@
     if(!name) return;
     store.tags[name] = colorInput.value;
     nameInput.value = '';
-    await commit();
+    await commit(() => saveTag(name, colorInput.value));
   });
 
   /* ---------- sidebar collapse toggle ---------- */
@@ -1313,7 +1329,7 @@
       const entry = modalState.entry;
       entry.content = value;
       closeEntryModal();
-      await commit();
+      await commit(() => saveEntry(entry));
       selectEntry(entry.id);
     }
   });

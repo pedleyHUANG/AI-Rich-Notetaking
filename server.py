@@ -4,9 +4,17 @@ server.py -- local server for the AI Log.
 
 Serves ai_log.html at "/", static assets (e.g. the vendored markdown/code/
 math renderers under vendor/) by relative path, and exposes the log data
-as JSON at "/api/log":
-  GET  /api/log   -> returns the current store {"tags": {...}, "entries": [...]}
-  POST /api/log   -> replaces the store with the JSON body (whole-document write)
+as JSON at "/api/log" and friends:
+  GET  /api/log               -> returns the current store {"tags": {...}, "entries": [...]}
+  POST /api/log/entry         -> add or update one entry; body is the entry object
+  POST /api/log/entry/delete  -> delete one entry; body {"id": "..."}
+  POST /api/log/tag           -> add or update one category; body {"name": "...", "color": "..."}
+  POST /api/log/tag/delete    -> delete one category; body {"name": "..."}
+
+Each of these writes touches only the data it changed (see store_io.py's
+upsert_entry/delete_entry/upsert_tag/delete_tag) instead of replacing the
+whole document, so a stale or partial client-side copy of the store can't
+wipe out entries it doesn't know about.
 
 Because the browser talks to a real server instead of touching the disk
 directly, this works in any browser -- Firefox and Safari included, not
@@ -97,24 +105,53 @@ def make_handler(data_dir: Path, html_path: Path, root_dir: Path):
                 else:
                     self._send_json({'error': 'not found'}, status=404)
 
+        def _read_json_body(self):
+            length = int(self.headers.get('Content-Length', 0))
+            raw = self.rfile.read(length)
+            return json.loads(raw)
+
         def do_POST(self):
-            if self.path != '/api/log':
+            if self.path not in ('/api/log/entry', '/api/log/entry/delete',
+                                  '/api/log/tag', '/api/log/tag/delete'):
                 self._send_json({'error': 'not found'}, status=404)
                 return
             try:
-                length = int(self.headers.get('Content-Length', 0))
-                raw = self.rfile.read(length)
-                store = json.loads(raw)
+                body = self._read_json_body()
             except (ValueError, json.JSONDecodeError) as err:
                 self._send_json({'error': f'invalid JSON body: {err}'}, status=400)
                 return
 
-            if not isinstance(store, dict) or 'tags' not in store or 'entries' not in store:
-                self._send_json({'error': 'body must contain "tags" and "entries"'}, status=400)
-                return
+            if self.path == '/api/log/entry':
+                if not isinstance(body, dict) or not body.get('id'):
+                    self._send_json({'error': 'body must be an entry object with an "id"'}, status=400)
+                    return
+                store_io.upsert_entry(data_dir, body)
+                self._send_json({'ok': True})
 
-            store_io.save_full_store(data_dir, store)
-            self._send_json({'ok': True})
+            elif self.path == '/api/log/entry/delete':
+                if not isinstance(body, dict) or not body.get('id'):
+                    self._send_json({'error': 'body must contain "id"'}, status=400)
+                    return
+                if not store_io.delete_entry(data_dir, body['id']):
+                    self._send_json({'error': f'no entry with id "{body["id"]}"'}, status=404)
+                    return
+                self._send_json({'ok': True})
+
+            elif self.path == '/api/log/tag':
+                if not isinstance(body, dict) or not body.get('name') or not body.get('color'):
+                    self._send_json({'error': 'body must contain "name" and "color"'}, status=400)
+                    return
+                store_io.upsert_tag(data_dir, body['name'], body['color'])
+                self._send_json({'ok': True})
+
+            else:  # /api/log/tag/delete
+                if not isinstance(body, dict) or not body.get('name'):
+                    self._send_json({'error': 'body must contain "name"'}, status=400)
+                    return
+                if not store_io.delete_tag(data_dir, body['name']):
+                    self._send_json({'error': f'no category "{body["name"]}"'}, status=404)
+                    return
+                self._send_json({'ok': True})
 
         def log_message(self, fmt, *args):
             # quieter default logging -- comment this out for verbose request logs
