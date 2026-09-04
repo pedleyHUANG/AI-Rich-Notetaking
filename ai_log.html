@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI Log</title>
+<title>AI Powered Notebook</title>
 <link rel="stylesheet" href="vendor/katex.min.css">
 <link rel="stylesheet" href="vendor/highlight-theme.min.css">
 <style>
@@ -17,8 +17,9 @@
     --text-faint: #98a1ab;
     --prompt: #ff8a3d;
     --prompt-soft: rgba(255, 138, 61, 0.16);
-    --sans: "Segoe UI", system-ui, -apple-system, Helvetica, Arial, sans-serif;
-    --display: "Avenir Next", "Century Gothic", "Segoe UI", var(--sans);
+    --font-title: "Avenir Next", "Century Gothic", "Segoe UI", sans-serif;
+    --font-system: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    --font-content: Georgia, Cambria, serif;
     --mono: ui-monospace, "SFMono-Regular", "IBM Plex Mono", Consolas, monospace;
   }
   *{ box-sizing: border-box; }
@@ -26,10 +27,13 @@
   body{
     background: var(--bg);
     color: var(--text);
-    font-family: var(--sans);
+    font-family: var(--font-system);
+    font-size: 0.85rem;
     line-height: 1.5;
   }
-  button, input, textarea, select{ font-family: inherit; }
+  button, select{ font-family: inherit; }
+  input, textarea{ font-family: var(--font-content); }
+  #search-title{ font-family: var(--font-system); }
 
   .app{
     display:flex;
@@ -59,10 +63,8 @@
     flex-shrink:0;
   }
   .sidebar-title{
-    font-family: var(--display);
-    font-size: 0.78rem;
+    font-family: var(--font-title);
     letter-spacing: 0.08em;
-    color: var(--text-faint);
     font-weight: 700;
   }
   .sidebar.collapsed .sidebar-title{ display:none; }
@@ -105,10 +107,7 @@
     border:none;
     cursor:pointer;
     padding: 8px 14px;
-    font-family: var(--display);
-    font-size: 0.82rem;
     font-weight: 600;
-    color: var(--text);
     display:flex;
     align-items:center;
     gap:8px;
@@ -134,13 +133,11 @@
     border-left: 2px solid var(--border);
     cursor:pointer;
     padding: 6px 10px;
-    font-size: 0.8rem;
-    color: var(--text-dim);
-    transition: background-color .15s ease, color .15s ease, border-color .15s ease;
+    font-family: var(--font-content);
+    transition: background-color .15s ease, border-color .15s ease;
   }
   .title-row:hover{
     background: var(--surface-alt);
-    color: var(--text);
     border-left-color: var(--text-dim);
   }
 
@@ -160,29 +157,25 @@
     margin-bottom: 20px;
   }
   .center-head h1{
-    font-family: var(--display);
+    font-family: var(--font-title);
     font-size: 1.5rem;
     margin:0;
     letter-spacing: -0.01em;
   }
-  .count{ font-family: var(--mono); font-size: 0.78rem; color: var(--text-faint); }
-  .save-status{ font-family: var(--mono); font-size: 0.75rem; color: var(--text-faint); margin-left:auto; }
+  .save-status{ margin-left:auto; }
   .save-status.err{ color: #b5453d; }
   .save-status.ok{ color: #4c8a58; }
 
   .load-error{
     background: #fdf1ef; border: 1px solid #f0c9c2; color: #8a3a30;
-    border-radius: 8px; padding: 16px 18px; font-size: 0.88rem;
+    border-radius: 8px; padding: 16px 18px;
   }
   .load-error code{ background: rgba(0,0,0,0.06); padding: 1px 5px; border-radius: 4px; }
 
   .date-group{ margin-top: 26px; }
   .date-group:first-child{ margin-top:0; }
   .date-head{
-    font-family: var(--display);
-    font-size: 0.85rem;
     font-weight: 700;
-    color: var(--text-dim);
     display:flex; align-items:center; gap:10px;
     margin-bottom: 12px;
   }
@@ -218,36 +211,32 @@
     100%{ background: transparent; }
   }
 
-  .entry-title{ font-weight: 600; font-size: 0.95rem; }
+  .entry-title{ font-family: var(--font-content); font-weight: 700; }
   .entry-title.untitled{ color: var(--text-faint); font-style: italic; font-weight: 500; }
   .entry-meta{ display:flex; align-items:center; gap:10px; flex-shrink:0; }
   .dots{ display:flex; gap:4px; }
   .dot{ width:9px; height:9px; border-radius:50%; }
-  .entry-time{ font-family: var(--mono); font-size: 0.72rem; color: var(--text-faint); }
 
   .entry-body{ padding: 4px 16px 16px; }
   .field{ margin-bottom: 12px; }
   .field label{
-    display:block; font-size: 0.68rem; text-transform:uppercase; letter-spacing:0.05em;
-    color: var(--text-faint); margin-bottom: 4px;
+    display:block; text-transform:uppercase; letter-spacing:0.05em; margin-bottom: 4px;
   }
-  .field-text{ font-size: 0.88rem; color: var(--text); white-space: pre-wrap; word-wrap: break-word; }
-  .field-text.content-text{ font-family: var(--mono); font-size: 0.84rem; color: var(--text-dim); }
+  .field-text{ font-family: var(--font-content); white-space: pre-wrap; word-wrap: break-word; }
   .field-text.empty-hint{ color: var(--text-faint); font-style: italic; }
 
   .entry-actions{ display:flex; gap:8px; margin-top: 6px; }
   .entry-actions.entry-actions-top{ margin: 0 0 12px; }
   .entry-actions button{
     background: var(--surface-alt); border: 1px solid var(--border); border-radius: 5px;
-    padding: 5px 11px; font-size: 0.78rem; cursor:pointer; color: var(--text-dim);
+    padding: 5px 11px; cursor:pointer;
   }
-  .entry-actions button:hover{ border-color: var(--text-faint); color: var(--text); }
+  .entry-actions button:hover{ border-color: var(--text-faint); }
   .entry-actions button.primary{ background:#e9f1eb; border-color:#bcd9c2; color:#3a6b46; }
 
   /* ---------- form fields (shared: add panel + edit forms) ---------- */
   label{
-    display:block; font-size: 0.72rem; text-transform:uppercase; letter-spacing:0.05em;
-    color: var(--text-faint); margin: 10px 0 4px;
+    display:block; text-transform:uppercase; letter-spacing:0.05em; margin: 10px 0 4px;
   }
   input[type=text], input:not([type]), textarea{
     width:100%;
@@ -255,11 +244,10 @@
     border: 1px solid var(--border);
     border-radius: 5px;
     color: var(--text);
-    font-size: 0.88rem;
     padding: 7px 10px;
   }
   input[type=text]:focus, input:not([type]):focus, textarea:focus{ outline: 2px solid #b8c6d9; outline-offset:1px; }
-  textarea{ min-height: 80px; resize: vertical; font-family: var(--mono); font-size: 0.83rem; }
+  textarea{ min-height: 80px; resize: vertical; }
   input[type=color]{
     width: 40px; height: 30px; padding: 2px;
     background: var(--surface-alt); border: 1px solid var(--border); border-radius: 5px;
@@ -269,17 +257,16 @@
   .chip-row{ display:flex; flex-wrap:wrap; gap:6px; margin-top:4px; }
   .chip{
     display:flex; align-items:center; gap:6px;
-    font-size: 0.78rem;
+    font-family: var(--font-content);
     background: var(--surface-alt);
     border: 1px solid var(--border);
     border-radius: 20px;
     padding: 4px 11px 4px 7px;
     cursor:pointer;
-    color: var(--text-dim);
     transition: border-color .15s ease, background-color .15s ease;
   }
   .chip .swatch{ width:9px; height:9px; border-radius:50%; flex-shrink:0; }
-  .chip.selected{ background:#eef2f6; border-color:#9fb3c8; color: var(--text); font-weight:600; }
+  .chip.selected{ background:#eef2f6; border-color:#9fb3c8; font-weight:600; }
   .chip.chip-prompt.selected{ background: var(--prompt-soft); border-color: var(--prompt); color:#a85a1f; }
   .chip:hover{ border-color: var(--text-faint); }
   .chip-row.shake{ animation: shake .3s ease; }
@@ -288,7 +275,7 @@
     25%{ transform: translateX(-4px); }
     75%{ transform: translateX(4px); }
   }
-  .hint{ text-transform:none; letter-spacing:0; color: var(--text-faint); font-size:0.68rem; }
+  .hint{ text-transform:none; letter-spacing:0; }
 
   /* ---------- Right panel ---------- */
   .rightpanel{
@@ -303,29 +290,27 @@
   }
   .panel{ border-bottom: 1px solid var(--border); padding: 16px 18px; }
   .panel h2{
-    font-family: var(--display);
-    font-size: 0.82rem;
+    font-family: var(--font-title);
     letter-spacing: 0.04em;
     margin: 0 0 4px;
     display:flex; align-items:center; gap:8px;
   }
-  .prompt-empty{ font-size: 0.8rem; color: var(--text-faint); font-style: italic; }
+  .prompt-empty{ color: var(--text-faint); font-style: italic; }
 
   #add-entry-btn{ margin-top: 14px; width:100%; }
   button.primary{
     background:#e9f1eb; border: 1px solid #bcd9c2; color:#3a6b46;
-    border-radius: 6px; padding: 9px 14px; font-size: 0.88rem; cursor:pointer; font-weight:600;
+    border-radius: 6px; padding: 9px 14px; cursor:pointer; font-weight:600;
   }
   button.primary:hover{ border-color:#3a6b46; }
-  button{ background: var(--surface-alt); border:1px solid var(--border); border-radius:6px; padding:8px 13px; font-size:0.85rem; cursor:pointer; color: var(--text); }
+  button{ background: var(--surface-alt); border:1px solid var(--border); border-radius:6px; padding:8px 13px; cursor:pointer; color: var(--text); }
   button:hover{ border-color: var(--text-faint); }
 
   .tag-list{ display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
   .tagchip{
     display:flex; align-items:center; gap:6px;
-    font-family: var(--mono); font-size: 0.72rem;
+    font-family: var(--font-content);
     border: 1px solid var(--border); border-radius: 20px; padding: 3px 10px 3px 6px;
-    color: var(--text-dim);
   }
   .tagchip.tagchip-prompt{ border-color: var(--prompt); color:#a85a1f; }
   .tagchip .swatch{ width:8px; height:8px; border-radius:50%; }
@@ -333,7 +318,7 @@
   .row input[type=text]{ flex:1; }
   .backdate-label{
     display:flex; align-items:center; gap:6px;
-    text-transform:none; letter-spacing:0; font-size:0.82rem; color: var(--text-dim);
+    text-transform:none; letter-spacing:0;
     margin: 12px 0 4px; cursor:pointer;
   }
   .backdate-label input[type=checkbox]{ width:auto; margin:0; }
@@ -345,7 +330,7 @@
   .dropdown-toggle{
     display:flex; align-items:center; gap:6px;
     background: var(--surface-alt); border: 1px solid var(--border); border-radius: 6px;
-    padding: 7px 11px; font-size: 0.85rem; cursor:pointer; color: var(--text-dim); width:100%;
+    padding: 7px 11px; cursor:pointer; width:100%;
     text-align:left; justify-content:space-between;
   }
   .dropdown-toggle:hover{ border-color: var(--text-faint); }
@@ -377,11 +362,10 @@
     max-height:320px; overflow-y:auto; padding: 8px 10px;
     background: var(--surface); border-color: var(--border); box-shadow: 0 6px 20px rgba(0,0,0,0.12);
   }
-  .filter-clear{ font-size:0.72rem; color: var(--text-faint); background:none; border:none; cursor:pointer; padding:4px 2px; }
-  .filter-clear:hover{ color: var(--text); }
+  .filter-clear{ background:none; border:none; cursor:pointer; padding:4px 2px; }
 
   /* ---------- entry markdown rendering ---------- */
-  .rendered-content{ font-size: 0.88rem; line-height:1.55; }
+  .rendered-content{ font-family: var(--font-content); line-height:1.55; }
   .rendered-content p{ margin: 0 0 0.7em; }
   .rendered-content p:last-child{ margin-bottom:0; }
   .rendered-content pre{
@@ -394,13 +378,13 @@
   }
   .rendered-content ul, .rendered-content ol{ margin: 0.4em 0; padding-left: 1.4em; }
   .rendered-content blockquote{
-    border-left: 3px solid var(--border); margin: 0.6em 0; padding: 2px 12px; color: var(--text-dim);
+    border-left: 3px solid var(--border); margin: 0.6em 0; padding: 2px 12px;
   }
   .rendered-content h1, .rendered-content h2, .rendered-content h3{
-    font-family: var(--display); margin: 0.6em 0 0.3em;
+    font-family: var(--font-content); margin: 0.6em 0 0.3em;
   }
   .rendered-content table{ border-collapse:collapse; margin: 0.6em 0; }
-  .rendered-content th, .rendered-content td{ border:1px solid var(--border); padding:4px 8px; font-size:0.85em; }
+  .rendered-content th, .rendered-content td{ border:1px solid var(--border); padding:4px 8px; }
   .rendered-content a{ color:#3a6b46; }
   .rendered-content img{ max-width:100%; }
 
@@ -418,32 +402,33 @@
     display:flex; align-items:center; gap:14px; padding: 14px 18px; border-bottom:1px solid var(--border);
     flex-shrink:0;
   }
-  .modal-head .modal-title{ font-family: var(--display); font-weight:700; font-size:0.95rem; flex:1; }
+  .modal-head .modal-title{ font-family: var(--font-content); font-weight:700; flex:1; }
   .modal-tabs{ display:flex; gap:4px; }
   .modal-tabs button{
-    background:none; border:1px solid var(--border); border-radius:5px; padding:5px 12px; font-size:0.8rem;
-    cursor:pointer; color: var(--text-dim);
+    background:none; border:1px solid var(--border); border-radius:5px; padding:5px 12px;
+    cursor:pointer;
   }
-  .modal-tabs button.active{ background: var(--surface-alt); color: var(--text); font-weight:600; border-color: var(--text-faint); }
+  .modal-tabs button.active{ background: var(--surface-alt); font-weight:600; border-color: var(--text-faint); }
   #modal-close{ background:none; border:none; font-size:1.3rem; cursor:pointer; color: var(--text-faint); line-height:1; padding:0 4px; }
   #modal-close:hover{ color: var(--text); }
   .modal-body{ flex:1; overflow-y:auto; padding: 18px 22px; }
-  #modal-editor{ width:100%; height:100%; min-height:100%; font-size:0.88rem; }
   .modal-actions{ display:flex; gap:8px; justify-content:flex-end; padding: 12px 18px; border-top:1px solid var(--border); flex-shrink:0; }
 
   /* ---------- token estimate popup ---------- */
   #tokens-modal .modal-box{ width: min(420px, 92vw); height: auto; max-height: 88vh; }
   .token-stats{ display:grid; gap:10px; margin-bottom:18px; }
-  .token-stat{ display:flex; justify-content:space-between; align-items:baseline; font-size:0.9rem; color: var(--text-dim); }
-  .token-stat b{ color: var(--text); font-weight:600; }
+  .token-stat{ display:flex; justify-content:space-between; align-items:baseline; }
+  .token-stat b{ font-weight:600; }
+  #tokens-entry-title{ font-family: var(--font-content); }
+  /* the estimate is a stat-tile callout, styled apart from the flat text hierarchy around it */
   .token-total{ margin: 4px 0 14px; padding: 16px; border-radius:8px; background: var(--prompt-soft); text-align:center; }
-  .token-total .num{ font-family: var(--display); font-size:2rem; font-weight:700; color: var(--prompt); line-height:1; }
+  .token-total .num{ font-family: var(--font-system); font-size:2rem; font-weight:700; color: var(--prompt); line-height:1; }
   .token-total .formula{ margin-top:6px; font-size:0.75rem; color: var(--text-faint); }
-  .token-fun{ text-align:center; font-size:0.85rem; color: var(--text-dim); font-style:italic; margin-bottom:16px; }
+  .token-fun{ text-align:center; font-style:italic; margin-bottom:16px; }
   .token-info-row{ text-align:center; }
   .token-info-toggle{
     display:inline-flex; align-items:center; gap:6px; background:none; border:1px solid var(--border);
-    border-radius:999px; padding:5px 12px; font-size:0.78rem; color: var(--text-dim); cursor:pointer;
+    border-radius:999px; padding:5px 12px; cursor:pointer;
   }
   .token-info-toggle:hover{ background: var(--surface-alt); }
   .token-info-toggle .badge{
@@ -452,7 +437,7 @@
   }
   .token-info-box{
     margin-top:12px; padding:12px 14px; border-radius:8px; background: var(--surface-alt);
-    border:1px solid var(--border); font-size:0.82rem; color: var(--text-dim); line-height:1.55;
+    border:1px solid var(--border); line-height:1.55;
   }
   .token-info-box[hidden]{ display:none; }
 </style>
@@ -470,7 +455,7 @@
 
   <main class="center">
     <div class="center-head">
-      <h1>AI Log</h1>
+      <h1>AI Powered Notebook</h1>
       <span class="count" id="entry-count"></span>
       <div class="filter-bar">
         <input type="text" id="search-title" placeholder="Search titles&hellip;">
@@ -516,7 +501,7 @@
     </section>
 
     <section class="panel">
-      <h2>Manage categories</h2>
+      <h2>Manage tags</h2>
       <div class="row">
         <input type="text" id="t-name" placeholder="name">
         <input type="color" id="t-color" value="#6c8ebf">
