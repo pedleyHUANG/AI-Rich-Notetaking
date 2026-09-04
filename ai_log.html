@@ -19,7 +19,7 @@
     --prompt-soft: rgba(255, 138, 61, 0.16);
     --font-title: "Avenir Next", "Century Gothic", "Segoe UI", sans-serif;
     --font-system: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
-    --font-content: Georgia, Cambria, serif;
+    --font-content: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
     --mono: ui-monospace, "SFMono-Regular", "IBM Plex Mono", Consolas, monospace;
   }
   *{ box-sizing: border-box; }
@@ -29,6 +29,7 @@
     color: var(--text);
     font-family: var(--font-system);
     font-size: 0.85rem;
+    font-weight: 300;
     line-height: 1.5;
   }
   button, select{ font-family: inherit; }
@@ -107,7 +108,6 @@
     border:none;
     cursor:pointer;
     padding: 8px 14px;
-    font-weight: 600;
     display:flex;
     align-items:center;
     gap:8px;
@@ -134,6 +134,7 @@
     cursor:pointer;
     padding: 6px 10px;
     font-family: var(--font-content);
+    font-weight: 400;
     transition: background-color .15s ease, border-color .15s ease;
   }
   .title-row:hover{
@@ -175,7 +176,6 @@
   .date-group{ margin-top: 26px; }
   .date-group:first-child{ margin-top:0; }
   .date-head{
-    font-weight: 700;
     display:flex; align-items:center; gap:10px;
     margin-bottom: 12px;
   }
@@ -222,7 +222,7 @@
   .field label{
     display:block; text-transform:uppercase; letter-spacing:0.05em; margin-bottom: 4px;
   }
-  .field-text{ font-family: var(--font-content); white-space: pre-wrap; word-wrap: break-word; }
+  .field-text{ font-family: var(--font-content); font-weight: 400; white-space: pre-wrap; word-wrap: break-word; }
   .field-text.empty-hint{ color: var(--text-faint); font-style: italic; }
 
   .entry-actions{ display:flex; gap:8px; margin-top: 6px; }
@@ -244,6 +244,7 @@
     border: 1px solid var(--border);
     border-radius: 5px;
     color: var(--text);
+    font-weight: 400;
     padding: 7px 10px;
   }
   input[type=text]:focus, input:not([type]):focus, textarea:focus{ outline: 2px solid #b8c6d9; outline-offset:1px; }
@@ -258,6 +259,7 @@
   .chip{
     display:flex; align-items:center; gap:6px;
     font-family: var(--font-content);
+    font-weight: 400;
     background: var(--surface-alt);
     border: 1px solid var(--border);
     border-radius: 20px;
@@ -310,6 +312,7 @@
   .tagchip{
     display:flex; align-items:center; gap:6px;
     font-family: var(--font-content);
+    font-weight: 400;
     border: 1px solid var(--border); border-radius: 20px; padding: 3px 10px 3px 6px;
   }
   .tagchip.tagchip-prompt{ border-color: var(--prompt); color:#a85a1f; }
@@ -365,7 +368,7 @@
   .filter-clear{ background:none; border:none; cursor:pointer; padding:4px 2px; }
 
   /* ---------- entry markdown rendering ---------- */
-  .rendered-content{ font-family: var(--font-content); line-height:1.55; }
+  .rendered-content{ font-family: var(--font-content); font-weight: 400; line-height:1.55; }
   .rendered-content p{ margin: 0 0 0.7em; }
   .rendered-content p:last-child{ margin-bottom:0; }
   .rendered-content pre{
@@ -419,7 +422,7 @@
   .token-stats{ display:grid; gap:10px; margin-bottom:18px; }
   .token-stat{ display:flex; justify-content:space-between; align-items:baseline; }
   .token-stat b{ font-weight:600; }
-  #tokens-entry-title{ font-family: var(--font-content); }
+  #tokens-entry-title{ font-family: var(--font-content); font-weight: 400; }
   /* the estimate is a stat-tile callout, styled apart from the flat text hierarchy around it */
   .token-total{ margin: 4px 0 14px; padding: 16px; border-radius:8px; background: var(--prompt-soft); text-align:center; }
   .token-total .num{ font-family: var(--font-system); font-size:2rem; font-weight:700; color: var(--prompt); line-height:1; }
@@ -1073,7 +1076,7 @@
     bodyInner.appendChild(actions);
 
     actions.querySelector('.save-btn').addEventListener('click', async () => {
-      entry.title = titleInput.value.trim();
+      entry.title = capitalizeFirst(titleInput.value.trim());
       entry.question = editSelected.has('PROMPT!') ? '' : qInput.value.trim();
       entry.categories = Array.from(editSelected);
       entry.content = contentInput.value;
@@ -1271,6 +1274,10 @@
     return nowIso();
   }
 
+  function capitalizeFirst(text){
+    return text ? text.charAt(0).toUpperCase() + text.slice(1) : text;
+  }
+
   document.getElementById('add-entry-btn').addEventListener('click', async () => {
     const titleInput = document.getElementById('f-title');
     const questionInput = document.getElementById('f-question');
@@ -1279,7 +1286,7 @@
     const entry = {
       id: 'e-' + Date.now() + '-' + Math.floor(Math.random()*1000),
       timestamp: entryTimestamp(),
-      title: titleInput.value.trim(),
+      title: capitalizeFirst(titleInput.value.trim()),
       question: addSelected.has('PROMPT!') ? '' : questionInput.value.trim(),
       categories: Array.from(addSelected),
       content: contentInput.value
