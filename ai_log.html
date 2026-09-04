@@ -87,6 +87,17 @@
   }
   .collapsible-inner{ padding: 0; }
 
+  /* entries expand to a fixed height (not content-driven like other collapsibles) */
+  .entry-collapsible{
+    max-height: none;
+    height: 0;
+    transition: height .22s ease;
+  }
+  .entry-collapsible.open{
+    height: var(--entry-expand-height, 66vh);
+    overflow-y: auto;
+  }
+
   .date-row{
     width:100%;
     text-align:left;
@@ -225,16 +236,13 @@
   .field-text.empty-hint{ color: var(--text-faint); font-style: italic; }
 
   .entry-actions{ display:flex; gap:8px; margin-top: 6px; }
+  .entry-actions.entry-actions-top{ margin: 0 0 12px; }
   .entry-actions button{
     background: var(--surface-alt); border: 1px solid var(--border); border-radius: 5px;
     padding: 5px 11px; font-size: 0.78rem; cursor:pointer; color: var(--text-dim);
   }
   .entry-actions button:hover{ border-color: var(--text-faint); color: var(--text); }
   .entry-actions button.primary{ background:#e9f1eb; border-color:#bcd9c2; color:#3a6b46; }
-
-  .note-form{ display:flex; gap:8px; margin-top:10px; }
-  .note-form input{ flex:1; }
-  .note-form[hidden]{ display:none; }
 
   /* ---------- form fields (shared: add panel + edit forms) ---------- */
   label{
@@ -750,15 +758,22 @@
     return keys.map(k => [k, groups[k].slice().sort((a,b) => b.timestamp.localeCompare(a.timestamp))]);
   }
 
-  /* generic accordion helpers, shared by sidebar date-groups and entry bodies */
+  /* generic accordion helpers, shared by sidebar date-groups and entry bodies.
+     entry bodies (.entry-collapsible) expand to a fixed height driven entirely by
+     CSS via the .open class, so they skip the inline scrollHeight measurement
+     the other (variable-height) collapsibles need. */
   function openCollapsible(headerEl, bodyEl){
     headerEl.classList.add('open');
     bodyEl.classList.add('open');
-    bodyEl.style.maxHeight = bodyEl.scrollHeight + 'px';
+    if(!bodyEl.classList.contains('entry-collapsible')){
+      bodyEl.style.maxHeight = bodyEl.scrollHeight + 'px';
+    }
   }
   function closeCollapsible(headerEl, bodyEl){
-    bodyEl.style.maxHeight = bodyEl.scrollHeight + 'px';
-    requestAnimationFrame(() => { bodyEl.style.maxHeight = '0px'; });
+    if(!bodyEl.classList.contains('entry-collapsible')){
+      bodyEl.style.maxHeight = bodyEl.scrollHeight + 'px';
+      requestAnimationFrame(() => { bodyEl.style.maxHeight = '0px'; });
+    }
     headerEl.classList.remove('open');
     bodyEl.classList.remove('open');
   }
@@ -767,7 +782,7 @@
     else openCollapsible(headerEl, bodyEl);
   }
   function refreshOpenHeight(bodyEl){
-    if(bodyEl && bodyEl.classList.contains('open')){
+    if(bodyEl && bodyEl.classList.contains('open') && !bodyEl.classList.contains('entry-collapsible')){
       bodyEl.style.maxHeight = bodyEl.scrollHeight + 'px';
     }
   }
@@ -993,6 +1008,12 @@
     bodyInner.innerHTML = '';
     bodyInner.className = 'collapsible-inner entry-body';
 
+    const actions = document.createElement('div');
+    actions.className = 'entry-actions entry-actions-top';
+    actions.innerHTML = '<button class="edit-btn">Edit</button><button class="expand-btn">Expand</button>'
+      + '<button class="tokens-btn">Tokens</button><button class="delete-btn danger">Delete</button>';
+    bodyInner.appendChild(actions);
+
     if(entry.question){
       const qf = document.createElement('div');
       qf.className = 'field';
@@ -1013,19 +1034,6 @@
     }
     bodyInner.appendChild(cf);
 
-    const actions = document.createElement('div');
-    actions.className = 'entry-actions';
-    actions.innerHTML = '<button class="edit-btn">Edit</button><button class="expand-btn">Expand</button>'
-      + '<button class="tokens-btn">Tokens</button>'
-      + '<button class="note-btn">+ Add note</button><button class="delete-btn danger">Delete</button>';
-    bodyInner.appendChild(actions);
-
-    const noteForm = document.createElement('div');
-    noteForm.className = 'note-form';
-    noteForm.hidden = true;
-    noteForm.innerHTML = '<input type="text" class="note-input" placeholder="Quick note..."><button class="note-submit">Add</button>';
-    bodyInner.appendChild(noteForm);
-
     actions.querySelector('.edit-btn').addEventListener('click', () => enterEditMode(bodyInner, entry, cardEl));
     actions.querySelector('.expand-btn').addEventListener('click', () => openEntryModal(entry));
     actions.querySelector('.tokens-btn').addEventListener('click', () => openTokensModal(entry));
@@ -1033,17 +1041,6 @@
       if(!confirm('Delete this entry?')) return;
       store.entries = store.entries.filter(e => e.id !== entry.id);
       await commit(() => deleteEntryRemote(entry.id));
-    });
-    actions.querySelector('.note-btn').addEventListener('click', () => {
-      noteForm.hidden = !noteForm.hidden;
-      refreshOpenHeight(bodyInner.parentElement);
-    });
-    noteForm.querySelector('.note-submit').addEventListener('click', async () => {
-      const text = noteForm.querySelector('.note-input').value.trim();
-      if(!text) return;
-      entry.content = (entry.content ? entry.content + '\n\n' : '') + '[' + formatTime(nowIso()) + '] ' + text;
-      await commit(() => saveEntry(entry));
-      selectEntry(entry.id);
     });
   }
 
@@ -1154,7 +1151,7 @@
         headRow.appendChild(metaEl);
 
         const collapsible = document.createElement('div');
-        collapsible.className = 'collapsible';
+        collapsible.className = 'collapsible entry-collapsible';
         const bodyInner = document.createElement('div');
         bodyInner.className = 'collapsible-inner entry-body';
         collapsible.appendChild(bodyInner);
