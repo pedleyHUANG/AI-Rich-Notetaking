@@ -422,6 +422,31 @@
   .modal-body{ flex:1; overflow-y:auto; padding: 18px 22px; }
   #modal-editor{ width:100%; height:100%; min-height:100%; font-size:0.88rem; }
   .modal-actions{ display:flex; gap:8px; justify-content:flex-end; padding: 12px 18px; border-top:1px solid var(--border); flex-shrink:0; }
+
+  /* ---------- token estimate popup ---------- */
+  #tokens-modal .modal-box{ width: min(420px, 92vw); height: auto; max-height: 88vh; }
+  .token-stats{ display:grid; gap:10px; margin-bottom:18px; }
+  .token-stat{ display:flex; justify-content:space-between; align-items:baseline; font-size:0.9rem; color: var(--text-dim); }
+  .token-stat b{ color: var(--text); font-weight:600; }
+  .token-total{ margin: 4px 0 14px; padding: 16px; border-radius:8px; background: var(--prompt-soft); text-align:center; }
+  .token-total .num{ font-family: var(--display); font-size:2rem; font-weight:700; color: var(--prompt); line-height:1; }
+  .token-total .formula{ margin-top:6px; font-size:0.75rem; color: var(--text-faint); }
+  .token-fun{ text-align:center; font-size:0.85rem; color: var(--text-dim); font-style:italic; margin-bottom:16px; }
+  .token-info-row{ text-align:center; }
+  .token-info-toggle{
+    display:inline-flex; align-items:center; gap:6px; background:none; border:1px solid var(--border);
+    border-radius:999px; padding:5px 12px; font-size:0.78rem; color: var(--text-dim); cursor:pointer;
+  }
+  .token-info-toggle:hover{ background: var(--surface-alt); }
+  .token-info-toggle .badge{
+    display:inline-flex; align-items:center; justify-content:center; width:15px; height:15px; border-radius:50%;
+    border:1px solid var(--text-faint); font-size:0.7rem; font-style:italic; font-family: Georgia, serif;
+  }
+  .token-info-box{
+    margin-top:12px; padding:12px 14px; border-radius:8px; background: var(--surface-alt);
+    border:1px solid var(--border); font-size:0.82rem; color: var(--text-dim); line-height:1.55;
+  }
+  .token-info-box[hidden]{ display:none; }
 </style>
 </head>
 <body>
@@ -512,6 +537,38 @@
     <div class="modal-actions">
       <button class="primary" id="modal-save">Save</button>
       <button id="modal-cancel">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="tokens-modal" hidden>
+  <div class="modal-box">
+    <div class="modal-head">
+      <span class="modal-title">Token estimate</span>
+      <button id="tokens-modal-close" aria-label="Close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="token-stats">
+        <div class="token-stat"><span>Entry</span><b id="tokens-entry-title"></b></div>
+        <div class="token-stat"><span>Word count</span><b id="tokens-word-count"></b></div>
+        <div class="token-stat"><span>Character count</span><b id="tokens-char-count"></b></div>
+      </div>
+      <div class="token-total">
+        <div class="num" id="tokens-estimate"></div>
+        <div class="formula">estimated tokens &mdash; words &times; 1.3, rounded</div>
+      </div>
+      <div class="token-fun" id="tokens-fun"></div>
+      <div class="token-info-row">
+        <button type="button" class="token-info-toggle" id="tokens-info-toggle" aria-expanded="false">
+          <span class="badge">i</span> What's a token?
+        </button>
+      </div>
+      <div class="token-info-box" id="tokens-info-box" hidden>
+        A token is roughly &frac34; of an English word &mdash; about 4 characters, punctuation
+        included. Models read and write text one token at a time, not one word at a time. This
+        popup multiplies your word count by ~1.3 (a common rule of thumb) &mdash; it's a fun
+        ballpark, not an exact count from a real tokenizer.
+      </div>
     </div>
   </div>
 </div>
@@ -959,6 +1016,7 @@
     const actions = document.createElement('div');
     actions.className = 'entry-actions';
     actions.innerHTML = '<button class="edit-btn">Edit</button><button class="expand-btn">Expand</button>'
+      + '<button class="tokens-btn">Tokens</button>'
       + '<button class="note-btn">+ Add note</button><button class="delete-btn danger">Delete</button>';
     bodyInner.appendChild(actions);
 
@@ -970,6 +1028,7 @@
 
     actions.querySelector('.edit-btn').addEventListener('click', () => enterEditMode(bodyInner, entry, cardEl));
     actions.querySelector('.expand-btn').addEventListener('click', () => openEntryModal(entry));
+    actions.querySelector('.tokens-btn').addEventListener('click', () => openTokensModal(entry));
     actions.querySelector('.delete-btn').addEventListener('click', async () => {
       if(!confirm('Delete this entry?')) return;
       store.entries = store.entries.filter(e => e.id !== entry.id);
@@ -1332,6 +1391,62 @@
       await commit(() => saveEntry(entry));
       selectEntry(entry.id);
     }
+  });
+
+  /* ---------- token estimate popup ---------- */
+  const tokensModalEl = document.getElementById('tokens-modal');
+  const tokensEntryTitleEl = document.getElementById('tokens-entry-title');
+  const tokensWordCountEl = document.getElementById('tokens-word-count');
+  const tokensCharCountEl = document.getElementById('tokens-char-count');
+  const tokensEstimateEl = document.getElementById('tokens-estimate');
+  const tokensFunEl = document.getElementById('tokens-fun');
+  const tokensInfoToggle = document.getElementById('tokens-info-toggle');
+  const tokensInfoBox = document.getElementById('tokens-info-box');
+
+  function countWords(text){
+    const trimmed = (text || '').trim();
+    return trimmed ? trimmed.split(/\s+/).length : 0;
+  }
+
+  function tokenFunLine(tokens){
+    if(tokens < 15) return 'Shorter than this sentence.';
+    if(tokens < 60) return 'About the length of a tweet.';
+    if(tokens < 150) return 'Roughly one solid paragraph.';
+    if(tokens < 400) return 'About a page of notes.';
+    if(tokens < 900) return 'A proper diary entry.';
+    if(tokens < 2000) return 'Short-story territory.';
+    return 'You basically wrote an essay.';
+  }
+
+  function openTokensModal(entry){
+    const text = [entry.title, entry.question, entry.content].filter(Boolean).join(' ');
+    const words = countWords(text);
+    const chars = text.length;
+    const tokens = Math.round(words * 1.3);
+
+    tokensEntryTitleEl.textContent = entry.title || '(untitled)';
+    tokensWordCountEl.textContent = words + (words === 1 ? ' word' : ' words');
+    tokensCharCountEl.textContent = chars + (chars === 1 ? ' character' : ' characters');
+    tokensEstimateEl.textContent = '~' + tokens.toLocaleString() + (tokens === 1 ? ' token' : ' tokens');
+    tokensFunEl.textContent = tokenFunLine(tokens);
+
+    tokensInfoBox.hidden = true;
+    tokensInfoToggle.setAttribute('aria-expanded', 'false');
+    tokensModalEl.hidden = false;
+  }
+
+  function closeTokensModal(){
+    tokensModalEl.hidden = true;
+  }
+
+  tokensInfoToggle.addEventListener('click', () => {
+    const open = !tokensInfoBox.hidden;
+    tokensInfoBox.hidden = open;
+    tokensInfoToggle.setAttribute('aria-expanded', String(!open));
+  });
+  document.getElementById('tokens-modal-close').addEventListener('click', closeTokensModal);
+  tokensModalEl.addEventListener('click', (e) => {
+    if(e.target === tokensModalEl) closeTokensModal();
   });
 
   loadStore();
