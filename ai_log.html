@@ -1082,7 +1082,7 @@
     bodyInner.appendChild(actions);
 
     actions.querySelector('.save-btn').addEventListener('click', async () => {
-      entry.title = capitalizeFirst(titleInput.value.trim());
+      entry.title = capitalizeWords(titleInput.value.trim());
       entry.question = editSelected.has('PROMPT!') ? '' : qInput.value.trim();
       entry.categories = Array.from(editSelected);
       entry.content = contentInput.value;
@@ -1280,8 +1280,8 @@
     return nowIso();
   }
 
-  function capitalizeFirst(text){
-    return text ? text.charAt(0).toUpperCase() + text.slice(1) : text;
+  function capitalizeWords(text){
+    return text.replace(/(^|\s)(\S)/g, (m, sep, ch) => sep + ch.toUpperCase());
   }
 
   document.getElementById('add-entry-btn').addEventListener('click', async () => {
@@ -1292,7 +1292,7 @@
     const entry = {
       id: 'e-' + Date.now() + '-' + Math.floor(Math.random()*1000),
       timestamp: entryTimestamp(),
-      title: capitalizeFirst(titleInput.value.trim()),
+      title: capitalizeWords(titleInput.value.trim()),
       question: addSelected.has('PROMPT!') ? '' : questionInput.value.trim(),
       categories: Array.from(addSelected),
       content: contentInput.value

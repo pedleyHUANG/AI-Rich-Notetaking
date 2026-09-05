@@ -31,6 +31,7 @@ and something is piped into stdin, that's used as the content.
 """
 
 import argparse
+import re
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -72,8 +73,8 @@ def read_content_arg(content):
     return ''
 
 
-def capitalize_first(text):
-    return text[0].upper() + text[1:] if text else text
+def capitalize_words(text):
+    return re.sub(r'(?:^|\s)\S', lambda m: m.group().upper(), text)
 
 
 def cmd_add(args):
@@ -86,7 +87,7 @@ def cmd_add(args):
     entry = {
         'id': 'e-' + str(int(datetime.now().timestamp() * 1000)),
         'timestamp': datetime.now().strftime('%Y-%m-%dT%H:%M:%S'),
-        'title': capitalize_first(args.title or ''),
+        'title': capitalize_words(args.title or ''),
         'question': '' if 'PROMPT!' in categories else (args.question or ''),
         'categories': categories,
         'content': content,
@@ -106,7 +107,7 @@ def cmd_edit(args):
         sys.exit(f'No entry with id "{args.id}". Use `log.py list` to see ids.')
 
     if args.title is not None:
-        entry['title'] = capitalize_first(args.title)
+        entry['title'] = capitalize_words(args.title)
     if args.category is not None:
         entry['categories'] = clean_categories(store, args.category)
     if args.question is not None:
