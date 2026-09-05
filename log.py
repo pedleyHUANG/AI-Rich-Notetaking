@@ -72,6 +72,10 @@ def read_content_arg(content):
     return ''
 
 
+def capitalize_first(text):
+    return text[0].upper() + text[1:] if text else text
+
+
 def cmd_add(args):
     directory = Path(args.dir)
     store = load_store(directory)
@@ -82,7 +86,7 @@ def cmd_add(args):
     entry = {
         'id': 'e-' + str(int(datetime.now().timestamp() * 1000)),
         'timestamp': datetime.now().strftime('%Y-%m-%dT%H:%M:%S'),
-        'title': args.title or '',
+        'title': capitalize_first(args.title or ''),
         'question': '' if 'PROMPT!' in categories else (args.question or ''),
         'categories': categories,
         'content': content,
@@ -102,7 +106,7 @@ def cmd_edit(args):
         sys.exit(f'No entry with id "{args.id}". Use `log.py list` to see ids.')
 
     if args.title is not None:
-        entry['title'] = args.title
+        entry['title'] = capitalize_first(args.title)
     if args.category is not None:
         entry['categories'] = clean_categories(store, args.category)
     if args.question is not None:
