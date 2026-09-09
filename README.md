@@ -4,8 +4,7 @@ A local, self-hosted notetaking log for tracking AI prompts, ideas, bugs, and
 decisions — browsable in any browser and editable from the command line, both
 reading and writing the same on-disk data.
 
-![AI Log screenshot](docs/images/screenshot-main.png)
-<!-- placeholder — see "Adding images" below -->
+![AI Log screenshot](version2GUI.png)
 
 ## Contents
 
@@ -145,6 +144,3 @@ show a broken-image icon until you add it. To add a real screenshot:
 4. Commit the image file along with your changes (`git add docs/images/...`)
    so it's actually part of the repository, not just present locally.
 
-You can add as many images as you like this way — e.g. one per feature
-(`docs/images/search-and-filter.png`, `docs/images/expand-modal.png`) placed
-next to the section of this README that describes it.

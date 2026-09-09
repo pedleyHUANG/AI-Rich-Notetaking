@@ -50,6 +50,8 @@ mimetypes.add_type('font/woff2', '.woff2')
 
 def make_handler(data_dir: Path, html_path: Path, root_dir: Path):
 
+    static_root = (root_dir / 'vendor').resolve()
+
     class Handler(BaseHTTPRequestHandler):
 
         def _send_json(self, obj, status=200):
@@ -78,11 +80,11 @@ def make_handler(data_dir: Path, html_path: Path, root_dir: Path):
             self.wfile.write(body)
 
         def _static_path(self):
-            """Resolve self.path to a file under root_dir, or None if unsafe/missing."""
+            """Resolve self.path to a file under vendor/, or None if unsafe/missing."""
             rel = self.path.split('?', 1)[0].lstrip('/')
             candidate = (root_dir / rel).resolve()
             try:
-                candidate.relative_to(root_dir.resolve())
+                candidate.relative_to(static_root)
             except ValueError:
                 return None
             if candidate.is_file():
