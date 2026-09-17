@@ -1451,18 +1451,7 @@
       store = await res.json();
       statusEl.textContent = 'Saved';
       statusEl.className = 'save-status ok';
-      // the Long Conversation timeline links here as /#entry-<id> -- if that
-      // entry is a Long Conversation entry (hidden by default), turn on the
-      // matching tag filter first so the deep link actually resolves to it
-      if(location.hash.startsWith('#entry-')){
-        const targetId = location.hash.slice('#entry-'.length);
-        const target = store.entries.find(e => e.id === targetId);
-        if(target && (target.categories || []).includes(LONG_CONVERSATION_TAG)){
-          filterState.tags.add(LONG_CONVERSATION_TAG);
-        }
-      }
       renderAll();
-      if(location.hash.startsWith('#entry-')) selectEntry(location.hash.slice('#entry-'.length));
     }catch(err){
       logRoot.innerHTML = '<div class="load-error">Could not reach the log server.<br>'
         + 'Make sure <code>server.py</code> is running and you opened this page as '

@@ -325,12 +325,11 @@
   }
 
   .tl-actions{ display:flex; gap:8px; margin-bottom: 12px; }
-  .tl-actions button, .tl-actions a{
+  .tl-actions button{
     background: var(--surface-alt); border: 1px solid var(--border); border-radius: 5px;
     padding: 5px 11px; cursor:pointer; color: var(--text-dim);
-    text-decoration:none; display:inline-block;
   }
-  .tl-actions button:hover, .tl-actions a:hover{ border-color: var(--text-faint); }
+  .tl-actions button:hover{ border-color: var(--text-faint); }
 
   /* ---------- topic picker ---------- */
   .topic-picker{ position:relative; display:inline-block; }
@@ -897,12 +896,8 @@
     expandBtn.type = 'button';
     expandBtn.textContent = 'Expand';
     expandBtn.addEventListener('click', () => openEntryModal(entry));
-    const openLink = document.createElement('a');
-    openLink.href = '/#entry-' + entry.id;
-    openLink.textContent = 'Open in Ai Log';
     actions.appendChild(expandBtn);
     actions.appendChild(buildTopicPicker(entry));
-    actions.appendChild(openLink);
     body.appendChild(actions);
 
     if(entry.question){
