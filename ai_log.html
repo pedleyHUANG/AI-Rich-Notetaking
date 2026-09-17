@@ -793,6 +793,13 @@
   function matchesFilter(entry){
     const text = filterState.searchText.trim().toLowerCase();
     if(text && !(entry.title || '').toLowerCase().includes(text)) return false;
+    // Long Conversation entries pile up fast and crowd out everything else in
+    // this list, so they're hidden from the default view. Explicitly filtering
+    // by that tag (or following a deep link to one, see loadStore) brings them
+    // back -- they still show up in Manage tags and the filter dropdown as usual.
+    if((entry.categories || []).includes(LONG_CONVERSATION_TAG) && !filterState.tags.has(LONG_CONVERSATION_TAG)){
+      return false;
+    }
     if(filterState.tags.size > 0){
       const cats = entry.categories || [];
       if(!cats.some(c => filterState.tags.has(c))) return false;
@@ -1444,8 +1451,17 @@
       store = await res.json();
       statusEl.textContent = 'Saved';
       statusEl.className = 'save-status ok';
+      // the Long Conversation timeline links here as /#entry-<id> -- if that
+      // entry is a Long Conversation entry (hidden by default), turn on the
+      // matching tag filter first so the deep link actually resolves to it
+      if(location.hash.startsWith('#entry-')){
+        const targetId = location.hash.slice('#entry-'.length);
+        const target = store.entries.find(e => e.id === targetId);
+        if(target && (target.categories || []).includes(LONG_CONVERSATION_TAG)){
+          filterState.tags.add(LONG_CONVERSATION_TAG);
+        }
+      }
       renderAll();
-      // the Long Conversation timeline links here as /#entry-<id>
       if(location.hash.startsWith('#entry-')) selectEntry(location.hash.slice('#entry-'.length));
     }catch(err){
       logRoot.innerHTML = '<div class="load-error">Could not reach the log server.<br>'
