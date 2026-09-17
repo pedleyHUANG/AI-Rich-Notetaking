@@ -1,0 +1,1155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Long Conversation</title>
+<link rel="stylesheet" href="vendor/katex.min.css">
+<link rel="stylesheet" href="vendor/highlight-theme.min.css">
+<style>
+  :root{
+    --bg: #eef0f3;
+    --surface: #ffffff;
+    --surface-alt: #f5f6f8;
+    --border: #dde1e6;
+    --text: #1b1f24;
+    --text-dim: #5b6470;
+    --text-faint: #98a1ab;
+    --prompt: #ff8a3d;
+    --prompt-soft: rgba(255, 138, 61, 0.16);
+    --font-title: "Avenir Next", "Century Gothic", "Segoe UI", sans-serif;
+    --font-system: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    --font-content: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    --mono: ui-monospace, "SFMono-Regular", "IBM Plex Mono", Consolas, monospace;
+    --rail: 84px;
+    /* the rail has to read against --bg, where --border alone disappears */
+    --rail-line: #c6ced7;
+  }
+  *{ box-sizing: border-box; }
+  html, body{ height:100%; margin:0; }
+  body{
+    background: var(--bg);
+    color: var(--text-dim);
+    font-family: var(--font-system);
+    font-size: 0.85rem;
+    font-weight: 300;
+    line-height: 1.5;
+  }
+  button, select{ font-family: inherit; }
+  input, textarea{ font-family: var(--font-content); }
+
+  .page{
+    display:flex;
+    flex-direction:column;
+    height:100vh;
+    overflow:hidden;
+  }
+
+  /* ---------- Top tab bar ---------- */
+  .topbar{
+    display:flex;
+    align-items:center;
+    gap:22px;
+    height:44px;
+    flex-shrink:0;
+    padding: 0 16px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+  }
+  .topbar-tabs{ display:flex; align-items:stretch; height:100%; gap:4px; }
+  .topbar-tab{
+    display:flex; align-items:center;
+    font-family: var(--font-title);
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    color: var(--text-dim);
+    text-decoration:none;
+    padding: 0 6px;
+    border-bottom: 2px solid transparent;
+    transition: color .15s ease, border-color .15s ease;
+  }
+  .topbar-tab:hover{ color: var(--text); }
+  .topbar-tab.active{ color: var(--text); border-bottom-color: var(--prompt); }
+  .topbar-profile{
+    display:flex; align-items:center; gap:8px;
+    margin-left:auto;
+    color: var(--text-dim);
+  }
+  .topbar-avatar{
+    width:26px; height:26px; border-radius:50%; flex-shrink:0;
+    background: var(--surface-alt); border: 1px solid var(--border);
+    display:flex; align-items:center; justify-content:center;
+    font-family: var(--font-title); font-size:0.7rem; font-weight:700; color: var(--text-dim);
+  }
+  .topbar-profile-name{ font-family: var(--font-system); font-weight:400; font-size:0.8rem; }
+
+  .app{
+    display:flex;
+    flex:1;
+    min-height:0;
+    overflow:hidden;
+  }
+
+  /* ---------- Sidebar ---------- */
+  .sidebar{
+    width: 22%;
+    min-width: 190px;
+    max-width: 280px;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    display:flex;
+    flex-direction:column;
+    transition: width .2s ease, min-width .2s ease;
+    flex-shrink:0;
+  }
+  .sidebar.collapsed{ width: 48px; min-width: 48px; }
+  .sidebar-head{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding: 14px 12px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink:0;
+  }
+  .sidebar-title{
+    font-family: var(--font-title);
+    letter-spacing: 0.08em;
+    font-weight: 700;
+    color: var(--text);
+  }
+  .sidebar.collapsed .sidebar-title{ display:none; }
+  #sidebar-toggle{
+    background:none; border:1px solid var(--border); border-radius:5px;
+    width:26px; height:26px; cursor:pointer; color: var(--text-dim);
+    display:flex; align-items:center; justify-content:center; font-size:0.9rem;
+    flex-shrink:0;
+  }
+  #sidebar-toggle:hover{ background: var(--surface-alt); }
+  .sidebar-scroll{
+    overflow-y:auto;
+    flex:1;
+    padding: 6px 0 20px;
+  }
+  .sidebar.collapsed .sidebar-scroll{ display:none; }
+  .sidebar-count{
+    padding: 6px 14px 10px;
+    color: var(--text-faint);
+    font-size: 0.75rem;
+  }
+
+  .topic-row{
+    display:block;
+    width: calc(100% - 24px);
+    margin: 0 0 4px 12px;
+    text-align:left;
+    background:none;
+    border:none;
+    border-left: 2px solid var(--border);
+    cursor:pointer;
+    padding: 8px 10px;
+    transition: background-color .15s ease, border-color .15s ease;
+  }
+  .topic-row:hover{ background: var(--surface-alt); border-left-color: var(--text-dim); }
+  .topic-row.active{ background: var(--surface-alt); border-left-color: var(--prompt); }
+  .topic-row-name{
+    display:block;
+    font-family: var(--font-content);
+    font-weight: 400;
+    color: var(--text);
+  }
+  .topic-row.active .topic-row-name{ font-weight: 600; }
+  .topic-row-meta{
+    display:block;
+    color: var(--text-faint);
+    font-size: 0.74rem;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ---------- Center ---------- */
+  .center{
+    flex:1;
+    min-width: 0;
+    display:flex;
+    flex-direction:column;
+    overflow:hidden;
+  }
+  .center-head{
+    display:flex;
+    flex-direction:column;
+    gap: 8px;
+    border-bottom: 1px solid var(--border);
+    padding: 18px 32px 14px;
+    flex-shrink:0;
+  }
+  .center-head-row{ display:flex; align-items:baseline; gap:14px; }
+  .center-title{
+    font-family: var(--font-title);
+    font-size: 0.85rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    color: var(--text);
+  }
+  .topic-name{
+    font-family: var(--font-content);
+    font-weight: 700;
+    color: var(--text);
+    font-size: 0.95rem;
+  }
+  .order-btn{
+    margin-left:auto;
+    background: var(--surface-alt); border:1px solid var(--border); border-radius:5px;
+    padding:5px 12px; cursor:pointer; color: var(--text-dim);
+  }
+  .order-btn:hover{ border-color: var(--text-faint); }
+  .order-btn[hidden]{ display:none; }
+  .save-status{ color: var(--text-dim); }
+  .save-status.err{ color: #b5453d; }
+  .save-status.ok{ color: #4c8a58; }
+
+  /* the span line + tick strip are what say "this topic runs across time" */
+  .topic-span{
+    color: var(--text-dim);
+    font-variant-numeric: tabular-nums;
+  }
+  .topic-span b{ color: var(--text); font-weight: 600; }
+  .span-bar{
+    position:relative;
+    height: 22px;
+    margin-top: 2px;
+  }
+  .span-bar::before{
+    content:"";
+    position:absolute; left:0; right:0; top:10px; height:2px;
+    background: var(--border); border-radius:1px;
+  }
+  .span-tick{
+    position:absolute; top:4px;
+    width:3px; height:14px; border-radius:2px;
+    transform: translateX(-1px);
+    cursor:pointer;
+    padding:0; border:none;
+  }
+  .span-tick:hover{ box-shadow: 0 0 0 3px var(--prompt-soft); }
+  .span-ends{
+    display:flex; justify-content:space-between;
+    color: var(--text-faint); font-size:0.72rem;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .timeline-scroll{
+    flex:1;
+    min-height:0;
+    overflow-y:auto;
+    padding: 20px 32px 80px;
+  }
+  .empty-hint{ color: var(--text-faint); font-style: italic; }
+  .empty-hint code{
+    font-family: var(--mono); background: var(--surface-alt);
+    border-radius:4px; padding:1px 5px; font-style: normal;
+  }
+  .load-error{
+    background: #fdf1ef; border: 1px solid #f0c9c2; color: #8a3a30;
+    border-radius: 8px; padding: 16px 18px;
+  }
+  .load-error code{ background: rgba(0,0,0,0.06); padding: 1px 5px; border-radius: 4px; }
+
+  /* ---------- timeline ---------- */
+  .timeline{ position:relative; }
+  .timeline::before{
+    content:"";
+    position:absolute;
+    left: calc(var(--rail) - 1px);
+    top: 6px;
+    bottom: 6px;
+    width: 2px;
+    background: var(--rail-line);
+    border-radius: 1px;
+  }
+  .tl-item{
+    position:relative;
+    display:grid;
+    grid-template-columns: 72px 24px 1fr;
+    align-items:start;
+    margin-bottom: 10px;
+  }
+  .tl-when{
+    text-align:right;
+    padding: 12px 12px 0 0;
+    color: var(--text-faint);
+    font-size: 0.74rem;
+    font-variant-numeric: tabular-nums;
+    line-height:1.3;
+  }
+  .tl-when .tl-day{ display:block; color: var(--text-dim); font-weight: 400; }
+  .tl-dot-cell{ display:flex; justify-content:center; padding-top: 15px; }
+  .tl-dot{
+    width: 11px; height: 11px; border-radius:50%;
+    background: var(--text-faint);
+    box-shadow: 0 0 0 3px var(--bg);
+  }
+  .tl-card{
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow:hidden;
+    transition: box-shadow .15s ease, border-color .15s ease;
+  }
+  .tl-card:hover{ border-color: var(--text-faint); }
+  .tl-card.open{ box-shadow: 0 4px 16px rgba(20,22,26,0.07); }
+  .tl-card.flash{ animation: flashbg .9s ease; }
+  @keyframes flashbg{
+    0%{ background: var(--prompt-soft); }
+    100%{ background: var(--surface); }
+  }
+  .category-stripe{ display:flex; height:4px; }
+  .category-stripe span{ flex:1; }
+  .category-stripe.empty{ background: var(--border); }
+  .tl-card-head{
+    display:flex; align-items:center; justify-content:space-between; gap:12px;
+    padding: 11px 14px;
+    cursor:pointer;
+  }
+  .tl-card-head:hover, .tl-card.open .tl-card-head{ background: var(--surface-alt); }
+  .tl-title{ font-family: var(--font-content); font-weight: 700; color: var(--text); }
+  .tl-title.untitled{ color: var(--text-faint); font-style: italic; font-weight: 500; }
+  .tl-meta{ display:flex; align-items:center; gap:10px; flex-shrink:0; }
+  .dots{ display:flex; gap:4px; }
+  .dot{ width:9px; height:9px; border-radius:50%; }
+  .tl-time{ color: var(--text-faint); font-size:0.74rem; font-variant-numeric: tabular-nums; }
+  .tl-card-body{ padding: 2px 14px 14px; }
+  .tl-card-body[hidden]{ display:none; }
+  .tl-question{
+    font-family: var(--font-content); color: var(--text);
+    border-left: 2px solid var(--border); padding: 2px 10px; margin-bottom: 10px;
+  }
+
+  .tl-actions{ display:flex; gap:8px; margin-bottom: 12px; }
+  .tl-actions button, .tl-actions a{
+    background: var(--surface-alt); border: 1px solid var(--border); border-radius: 5px;
+    padding: 5px 11px; cursor:pointer; color: var(--text-dim);
+    text-decoration:none; display:inline-block;
+  }
+  .tl-actions button:hover, .tl-actions a:hover{ border-color: var(--text-faint); }
+
+  /* ---------- topic picker ---------- */
+  .topic-picker{ position:relative; display:inline-block; }
+  .topic-picker-panel{
+    position:absolute; left:0; top:calc(100% + 6px); z-index:5; width:280px;
+    background: var(--surface); border:1px solid var(--border); border-radius:8px;
+    box-shadow: 0 6px 20px rgba(20,22,26,0.14); padding:10px;
+  }
+  .topic-picker-panel[hidden]{ display:none; }
+  .topic-chip-row{ display:flex; flex-wrap:wrap; gap:6px; }
+  .topic-chip{
+    font-family: var(--font-content); color: var(--text);
+    background: var(--surface-alt); border:1px solid var(--border); border-radius:20px;
+    padding:4px 11px; cursor:pointer;
+  }
+  .topic-chip:hover{ border-color: var(--text-faint); }
+  .topic-picker-new{ margin-top:8px; }
+  .topic-picker-new input{
+    width:100%; background: var(--surface-alt); border:1px solid var(--border);
+    border-radius:5px; color: var(--text); font-weight:400; padding:7px 10px;
+  }
+  .topic-picker-new input:focus{ outline: 2px solid #b8c6d9; outline-offset:1px; }
+  .tl-unfiled{
+    color: var(--text-faint); font-style: italic;
+    margin: 0 0 14px calc(var(--rail) + 24px);
+  }
+
+  /* a quiet stretch between two entries, drawn over the rail */
+  .tl-gap{
+    position:relative;
+    padding: 8px 0 8px calc(var(--rail) + 24px);
+    color: var(--text-faint);
+    font-size: 0.72rem;
+    letter-spacing: 0.05em;
+  }
+  .tl-gap::before{
+    content:"";
+    position:absolute; left: calc(var(--rail) - 3px); top:0; bottom:0;
+    width:6px; background: var(--bg);
+  }
+  .tl-gap::after{
+    content:"";
+    position:absolute; left: calc(var(--rail) - 1px); top:3px; bottom:3px;
+    border-left: 2px dashed var(--text-faint);
+  }
+
+  /* ---------- rendered markdown ---------- */
+  .rendered-content{ font-family: var(--font-content); font-weight: 400; color: var(--text); line-height:1.55; }
+  .rendered-content p{ margin: 0 0 0.7em; }
+  .rendered-content p:last-child{ margin-bottom:0; }
+  .rendered-content pre{
+    background:#1e1e1e; border-radius:6px; padding:10px 12px; overflow-x:auto;
+    font-size:0.8rem; margin: 0.6em 0;
+  }
+  .rendered-content pre code{ font-family: var(--mono); background:none; padding:0; }
+  .rendered-content code{
+    font-family: var(--mono); background: var(--surface-alt); border-radius:4px; padding:1px 5px; font-size:0.85em;
+  }
+  .rendered-content ul, .rendered-content ol{ margin: 0.4em 0; padding-left: 1.4em; }
+  .rendered-content blockquote{ border-left: 3px solid var(--border); margin: 0.6em 0; padding: 2px 12px; }
+  .rendered-content h1, .rendered-content h2, .rendered-content h3{
+    font-family: var(--font-content); margin: 0.6em 0 0.3em;
+  }
+  .rendered-content table{ border-collapse:collapse; margin: 0.6em 0; }
+  .rendered-content th, .rendered-content td{ border:1px solid var(--border); padding:4px 8px; }
+  .rendered-content a{ color:#3a6b46; }
+  .rendered-content img{ max-width:100%; }
+
+  /* ---------- expand modal ---------- */
+  .modal-overlay{
+    position:fixed; inset:0; background: rgba(20,22,26,0.45);
+    display:flex; align-items:center; justify-content:center; z-index:50;
+  }
+  .modal-overlay[hidden]{ display:none; }
+  .modal-box{
+    background: var(--surface); border-radius: 10px; width: min(820px, 92vw); height: min(680px, 88vh);
+    display:flex; flex-direction:column; overflow:hidden; box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+  }
+  .modal-head{
+    display:flex; align-items:center; gap:14px; padding: 14px 18px; border-bottom:1px solid var(--border);
+    flex-shrink:0;
+  }
+  .modal-head .modal-title{ font-family: var(--font-content); font-weight:700; color: var(--text); flex:1; }
+  .modal-tabs{ display:flex; gap:4px; }
+  .modal-tabs button{
+    background:none; border:1px solid var(--border); border-radius:5px; padding:5px 12px;
+    cursor:pointer; color: var(--text-dim);
+  }
+  .modal-tabs button.active{ background: var(--surface-alt); font-weight:600; border-color: var(--text-faint); color: var(--text); }
+  #modal-close{ background:none; border:none; font-size:1.3rem; cursor:pointer; color: var(--text-faint); line-height:1; padding:0 4px; }
+  #modal-close:hover{ color: var(--text); }
+  .modal-body{ flex:1; overflow-y:auto; padding: 18px 22px; }
+  #modal-editor{
+    width:100%; min-height: 100%;
+    background: var(--surface-alt); border: 1px solid var(--border); border-radius: 5px;
+    color: var(--text); font-family: var(--mono); font-size:0.82rem; line-height:1.5;
+    padding: 12px 14px; resize: vertical;
+  }
+  #modal-editor[hidden]{ display:none; }
+  .modal-actions{
+    display:flex; gap:8px; justify-content:flex-end; padding: 12px 18px;
+    border-top:1px solid var(--border); flex-shrink:0;
+  }
+  button.primary{
+    background:#e9f1eb; border: 1px solid #bcd9c2; color:#3a6b46;
+    border-radius: 6px; padding: 9px 14px; cursor:pointer; font-weight:600;
+  }
+  button.primary:hover{ border-color:#3a6b46; }
+  .modal-actions button{ background: var(--surface-alt); border:1px solid var(--border); border-radius:6px; padding:8px 13px; cursor:pointer; color: var(--text-dim); }
+  .modal-actions button.primary{ background:#e9f1eb; border-color:#bcd9c2; color:#3a6b46; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <header class="topbar">
+    <nav class="topbar-tabs">
+      <a class="topbar-tab" href="/">Ai Log</a>
+      <a class="topbar-tab" href="/spec">Spec Organization</a>
+      <a class="topbar-tab active" href="/long">Long Conversation</a>
+    </nav>
+    <div class="topbar-profile">
+      <span class="topbar-avatar">P</span>
+      <span class="topbar-profile-name">Pedley</span>
+    </div>
+  </header>
+
+<div class="app">
+
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-head">
+      <span class="sidebar-title">TOPICS</span>
+      <button id="sidebar-toggle" aria-label="Toggle sidebar">&lsaquo;</button>
+    </div>
+    <div class="sidebar-scroll" id="sidebar-scroll"></div>
+  </nav>
+
+  <main class="center">
+    <header class="center-head">
+      <div class="center-head-row">
+        <span class="center-title">CONVERSATION</span>
+        <span class="topic-name" id="topic-name"></span>
+        <button class="order-btn" id="order-btn" hidden>Newest first</button>
+        <span class="save-status" id="save-status"></span>
+      </div>
+      <div class="topic-span" id="topic-span"></div>
+      <div id="span-bar-wrap" hidden>
+        <div class="span-bar" id="span-bar"></div>
+        <div class="span-ends" id="span-ends"></div>
+      </div>
+    </header>
+    <div class="timeline-scroll" id="timeline-scroll">
+      <div class="empty-hint">Loading&hellip;</div>
+    </div>
+  </main>
+
+</div>
+</div>
+
+<div class="modal-overlay" id="entry-modal" hidden>
+  <div class="modal-box">
+    <div class="modal-head">
+      <span class="modal-title" id="modal-title"></span>
+      <div class="modal-tabs">
+        <button type="button" class="active" id="modal-tab-preview">Preview</button>
+        <button type="button" id="modal-tab-edit">Edit</button>
+      </div>
+      <button id="modal-close" aria-label="Close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div id="modal-preview" class="rendered-content"></div>
+      <textarea id="modal-editor" hidden></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="primary" id="modal-save">Save</button>
+      <button id="modal-cancel">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script src="vendor/marked.min.js"></script>
+<script src="vendor/dompurify.min.js"></script>
+<script src="vendor/highlight.min.js"></script>
+<script src="vendor/hljs-lang/python.min.js"></script>
+<script src="vendor/hljs-lang/javascript.min.js"></script>
+<script src="vendor/hljs-lang/typescript.min.js"></script>
+<script src="vendor/hljs-lang/bash.min.js"></script>
+<script src="vendor/hljs-lang/json.min.js"></script>
+<script src="vendor/hljs-lang/xml.min.js"></script>
+<script src="vendor/hljs-lang/css.min.js"></script>
+<script src="vendor/hljs-lang/c.min.js"></script>
+<script src="vendor/hljs-lang/cpp.min.js"></script>
+<script src="vendor/hljs-lang/java.min.js"></script>
+<script src="vendor/hljs-lang/sql.min.js"></script>
+<script src="vendor/hljs-lang/yaml.min.js"></script>
+<script src="vendor/katex.min.js"></script>
+<script src="vendor/katex-auto-render.min.js"></script>
+<script>
+(function(){
+
+  const LONG_CONVERSATION_TAG = 'LONG CONVERSATION';
+  const NO_TOPIC = '(no topic)';
+  const TOPIC_MIN_CHARS = 5;
+  const GAP_DAYS = 2;
+  const DAY_MS = 86400000;
+
+  let store = { tags: {}, entries: [] };
+  let topics = [];
+  let currentTopic = null;
+  let newestFirst = true;
+
+  const sidebarScroll = document.getElementById('sidebar-scroll');
+  const timelineScroll = document.getElementById('timeline-scroll');
+  const topicNameEl = document.getElementById('topic-name');
+  const topicSpanEl = document.getElementById('topic-span');
+  const spanBarWrap = document.getElementById('span-bar-wrap');
+  const spanBarEl = document.getElementById('span-bar');
+  const spanEndsEl = document.getElementById('span-ends');
+  const orderBtn = document.getElementById('order-btn');
+  const statusEl = document.getElementById('save-status');
+
+  /* ---------- dates ---------- */
+  function dateKey(ts){ return ts.slice(0, 10); }
+  function dayStamp(ts){ return new Date(dateKey(ts) + 'T00:00:00').getTime(); }
+  function daysBetween(a, b){ return Math.round(Math.abs(dayStamp(b) - dayStamp(a)) / DAY_MS); }
+  function formatDay(ts){
+    return new Date(dateKey(ts) + 'T00:00:00')
+      .toLocaleDateString(undefined, { month:'short', day:'numeric' });
+  }
+  function formatYear(ts){ return ts.slice(0, 4); }
+  function formatTime(ts){
+    return new Date(ts).toLocaleTimeString(undefined, { hour:'2-digit', minute:'2-digit' });
+  }
+
+  /* ---------- markdown / code / LaTeX rendering ---------- */
+
+  /* mirrors text_format.py's strip_stray_asterisk_lines -- drops lines that are
+     just a lone "*", which some pasted sources wrap bullet lists in */
+  function stripStrayAsteriskLines(text){
+    if(!text) return text;
+    const isLoneAsterisk = line => /^[ \t]*\*[ \t]*$/.test(line);
+    return text.split('\n').filter(line => !isLoneAsterisk(line)).join('\n');
+  }
+
+  let markedConfigured = false;
+  function configureMarked(){
+    if(markedConfigured) return;
+    marked.setOptions({ breaks: true, gfm: true });
+    const renderer = new marked.Renderer();
+    renderer.code = function(code, infostring){
+      const lang = (infostring || '').trim().split(/\s+/)[0];
+      let highlighted;
+      if(window.hljs && lang && hljs.getLanguage(lang)){
+        highlighted = hljs.highlight(code, { language: lang }).value;
+      } else if(window.hljs){
+        highlighted = hljs.highlightAuto(code).value;
+      } else {
+        highlighted = code.replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+      }
+      return '<pre><code class="hljs' + (lang ? ' language-' + lang : '') + '">' + highlighted + '</code></pre>';
+    };
+    marked.use({ renderer });
+    markedConfigured = true;
+  }
+
+  function renderMarkdown(el, text){
+    configureMarked();
+    const rawHtml = marked.parse(stripStrayAsteriskLines(text || ''));
+    el.innerHTML = window.DOMPurify ? DOMPurify.sanitize(rawHtml, { ADD_ATTR: ['target'] }) : rawHtml;
+    if(window.renderMathInElement){
+      renderMathInElement(el, {
+        delimiters: [
+          { left: '$$', right: '$$', display: true },
+          { left: '$', right: '$', display: false },
+          { left: '\\(', right: '\\)', display: false },
+          { left: '\\[', right: '\\]', display: true }
+        ],
+        throwOnError: false
+      });
+    }
+  }
+
+  /* ---------- grouping ---------- */
+  function tagColor(name){ return store.tags[name] || '#ccc'; }
+
+  function buildTopics(){
+    const groups = new Map();
+    store.entries.forEach(entry => {
+      if(!(entry.categories || []).includes(LONG_CONVERSATION_TAG)) return;
+      const name = (entry.topic || '').trim() || NO_TOPIC;
+      if(!groups.has(name)) groups.set(name, []);
+      groups.get(name).push(entry);
+    });
+    topics = Array.from(groups.entries()).map(([name, entries]) => {
+      entries.sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+      return {
+        name,
+        entries,
+        first: entries[0].timestamp,
+        last: entries[entries.length - 1].timestamp
+      };
+    });
+    // most recently active first, with the catch-all bucket always last so it
+    // never becomes the landing topic
+    topics.sort((a, b) => {
+      if(a.name === NO_TOPIC) return 1;
+      if(b.name === NO_TOPIC) return -1;
+      return b.last.localeCompare(a.last);
+    });
+  }
+
+  function findTopic(name){ return topics.find(t => t.name === name) || null; }
+
+  /* ---------- sidebar ---------- */
+  function renderSidebar(){
+    sidebarScroll.innerHTML = '';
+    const entryCount = topics.reduce((sum, t) => sum + t.entries.length, 0);
+    const count = document.createElement('div');
+    count.className = 'sidebar-count';
+    count.textContent = topics.length
+      ? topics.length + (topics.length === 1 ? ' topic · ' : ' topics · ') + entryCount
+        + (entryCount === 1 ? ' entry' : ' entries')
+      : 'No topics yet';
+    sidebarScroll.appendChild(count);
+
+    topics.forEach(topic => {
+      const row = document.createElement('button');
+      row.className = 'topic-row' + (topic.name === currentTopic ? ' active' : '');
+      const name = document.createElement('span');
+      name.className = 'topic-row-name';
+      name.textContent = topic.name;
+      const meta = document.createElement('span');
+      meta.className = 'topic-row-meta';
+      meta.textContent = topic.entries.length + (topic.entries.length === 1 ? ' entry · ' : ' entries · ')
+        + formatDay(topic.last);
+      row.appendChild(name);
+      row.appendChild(meta);
+      row.addEventListener('click', () => selectTopic(topic.name));
+      sidebarScroll.appendChild(row);
+    });
+  }
+
+  /* ---------- head: the span line and tick strip ---------- */
+  function renderHead(topic){
+    if(!topic){
+      topicNameEl.textContent = '';
+      topicSpanEl.textContent = '';
+      spanBarWrap.hidden = true;
+      orderBtn.hidden = true;
+      return;
+    }
+    topicNameEl.textContent = topic.name;
+    orderBtn.hidden = topic.entries.length < 2;
+
+    const count = topic.entries.length + (topic.entries.length === 1 ? ' entry' : ' entries');
+    if(topic.entries.length < 2){
+      topicSpanEl.innerHTML = '<b></b>';
+      topicSpanEl.querySelector('b').textContent = count;
+      topicSpanEl.append(' · ' + formatDay(topic.first) + ', ' + formatYear(topic.first));
+      spanBarWrap.hidden = true;
+      return;
+    }
+
+    const days = daysBetween(topic.first, topic.last);
+    topicSpanEl.innerHTML = '<b></b>';
+    topicSpanEl.querySelector('b').textContent = count;
+    topicSpanEl.append(' · ' + formatDay(topic.first) + ' → ' + formatDay(topic.last)
+      + ' · spans ' + days + (days === 1 ? ' day' : ' days'));
+
+    // one tick per entry, placed by where it falls across the topic's span
+    const start = dayStamp(topic.first);
+    const width = Math.max(dayStamp(topic.last) - start, 1);
+    spanBarEl.innerHTML = '';
+    topic.entries.forEach(entry => {
+      const tick = document.createElement('button');
+      tick.type = 'button';
+      tick.className = 'span-tick';
+      tick.style.left = ((dayStamp(entry.timestamp) - start) / width * 100) + '%';
+      tick.style.background = tagColor((entry.categories || [])[0]);
+      tick.title = (entry.title || '(untitled)') + ' — ' + formatDay(entry.timestamp);
+      tick.addEventListener('click', () => revealEntry(entry.id));
+      spanBarEl.appendChild(tick);
+    });
+    spanEndsEl.innerHTML = '';
+    const left = document.createElement('span');
+    left.textContent = formatDay(topic.first) + ', ' + formatYear(topic.first);
+    const right = document.createElement('span');
+    right.textContent = formatDay(topic.last) + ', ' + formatYear(topic.last);
+    spanEndsEl.appendChild(left);
+    spanEndsEl.appendChild(right);
+    spanBarWrap.hidden = false;
+  }
+
+  /* ---------- timeline ---------- */
+  function categoryStripe(categories){
+    const stripe = document.createElement('div');
+    if(!categories || categories.length === 0){
+      stripe.className = 'category-stripe empty';
+      return stripe;
+    }
+    stripe.className = 'category-stripe';
+    categories.forEach(name => {
+      const seg = document.createElement('span');
+      seg.style.background = tagColor(name);
+      stripe.appendChild(seg);
+    });
+    return stripe;
+  }
+
+  function categoryDots(categories){
+    const wrap = document.createElement('div');
+    wrap.className = 'dots';
+    (categories || []).forEach(name => {
+      const d = document.createElement('span');
+      d.className = 'dot';
+      d.title = name;
+      d.style.background = tagColor(name);
+      wrap.appendChild(d);
+    });
+    return wrap;
+  }
+
+  /* matches how the Ai Log page normalizes titles and topic names */
+  function capitalizeWords(text){
+    return text.replace(/(^|\s)(\S)/g, (m, sep, ch) => sep + ch.toUpperCase());
+  }
+
+  /* File an entry under a topic, then follow it to where it landed so the move
+     is visible. Entries tagged but never filed sit in the NO_TOPIC bucket, and
+     this is the only way to get them out from the page where you can see them. */
+  async function applyTopic(entry, topic){
+    if(!topic || topic === (entry.topic || '')) return;
+    entry.topic = topic;
+    await saveEntry(entry);
+    buildTopics();
+    renderSidebar();
+    selectTopic(topic);
+    revealEntry(entry.id);
+  }
+
+  /* Picking a topic applies it on the spot -- no confirm button to forget. */
+  function buildTopicPicker(entry){
+    const wrap = document.createElement('div');
+    wrap.className = 'topic-picker';
+
+    const toggle = document.createElement('button');
+    toggle.type = 'button';
+    toggle.textContent = entry.topic ? 'Move to topic…' : 'File under…';
+
+    const panel = document.createElement('div');
+    panel.className = 'topic-picker-panel';
+    panel.hidden = true;
+
+    const chipRow = document.createElement('div');
+    chipRow.className = 'topic-chip-row';
+    topics
+      .filter(t => t.name !== NO_TOPIC && t.name !== (entry.topic || ''))
+      .forEach(t => {
+        const chip = document.createElement('button');
+        chip.type = 'button';
+        chip.className = 'topic-chip';
+        chip.textContent = t.name;
+        chip.addEventListener('click', () => commit(t.name));
+        chipRow.appendChild(chip);
+      });
+
+    const newRow = document.createElement('div');
+    newRow.className = 'topic-picker-new';
+    const newInput = document.createElement('input');
+    newInput.type = 'text';
+    newInput.placeholder = 'Type a new topic…';
+    newRow.appendChild(newInput);
+
+    panel.appendChild(chipRow);
+    panel.appendChild(newRow);
+
+    // one assignment per picker: applying re-renders the timeline out from under it
+    let done = false;
+    function commit(topic){
+      if(done) return;
+      done = true;
+      openPicker = null;
+      applyTopic(entry, topic);
+    }
+
+    // Enter is an explicit commit, so it takes text too short to count on its own
+    newInput.addEventListener('keydown', (e) => {
+      if(e.key === 'Enter'){
+        e.preventDefault();
+        const typed = capitalizeWords(newInput.value.trim());
+        if(typed) commit(typed);
+      }
+    });
+
+    /* Closing the picker is the other commit moment: substantial text that was
+       typed but never confirmed still files the entry, the same way the add form
+       reads a half-typed topic when you click Add entry. */
+    function flush(){
+      const typed = newInput.value.trim();
+      if(typed.length >= TOPIC_MIN_CHARS) commit(capitalizeWords(typed));
+    }
+
+    toggle.addEventListener('click', () => {
+      if(openPicker && openPicker.panel === panel){
+        closeTopicPicker();
+        return;
+      }
+      closeTopicPicker();
+      panel.hidden = false;
+      openPicker = { panel, flush };
+      newInput.focus();
+    });
+
+    wrap.appendChild(toggle);
+    wrap.appendChild(panel);
+    return wrap;
+  }
+
+  /* only ever one picker open, so closing is a single well-defined moment */
+  let openPicker = null;
+
+  function closeTopicPicker(){
+    if(!openPicker) return;
+    const current = openPicker;
+    openPicker = null;
+    current.panel.hidden = true;
+    current.flush();
+  }
+
+  document.addEventListener('click', (e) => {
+    if(!e.composedPath().some(el => el.classList && el.classList.contains('topic-picker'))){
+      closeTopicPicker();
+    }
+  });
+
+  function buildCard(entry){
+    const card = document.createElement('div');
+    card.className = 'tl-card';
+    card.id = 'tl-' + entry.id;
+    card.appendChild(categoryStripe(entry.categories));
+
+    const head = document.createElement('div');
+    head.className = 'tl-card-head';
+    const title = document.createElement('span');
+    title.className = 'tl-title' + (entry.title ? '' : ' untitled');
+    title.textContent = entry.title || '(untitled)';
+    const meta = document.createElement('div');
+    meta.className = 'tl-meta';
+    meta.appendChild(categoryDots(entry.categories));
+    const time = document.createElement('span');
+    time.className = 'tl-time';
+    time.textContent = formatTime(entry.timestamp);
+    meta.appendChild(time);
+    head.appendChild(title);
+    head.appendChild(meta);
+
+    const body = document.createElement('div');
+    body.className = 'tl-card-body';
+    body.hidden = true;
+
+    const actions = document.createElement('div');
+    actions.className = 'tl-actions';
+    const expandBtn = document.createElement('button');
+    expandBtn.type = 'button';
+    expandBtn.textContent = 'Expand';
+    expandBtn.addEventListener('click', () => openEntryModal(entry));
+    const openLink = document.createElement('a');
+    openLink.href = '/#entry-' + entry.id;
+    openLink.textContent = 'Open in Ai Log';
+    actions.appendChild(expandBtn);
+    actions.appendChild(buildTopicPicker(entry));
+    actions.appendChild(openLink);
+    body.appendChild(actions);
+
+    if(entry.question){
+      const q = document.createElement('div');
+      q.className = 'tl-question';
+      q.textContent = entry.question;
+      body.appendChild(q);
+    }
+
+    const content = document.createElement('div');
+    content.className = 'rendered-content';
+    if(entry.content){
+      renderMarkdown(content, entry.content);
+    } else {
+      content.innerHTML = '<span class="empty-hint">(empty)</span>';
+    }
+    body.appendChild(content);
+
+    head.addEventListener('click', () => {
+      body.hidden = !body.hidden;
+      card.classList.toggle('open', !body.hidden);
+    });
+
+    card.appendChild(head);
+    card.appendChild(body);
+    return card;
+  }
+
+  function renderTimeline(){
+    const topic = findTopic(currentTopic);
+    timelineScroll.innerHTML = '';
+    if(!topic) return;
+
+    if(topic.name === NO_TOPIC){
+      const hint = document.createElement('div');
+      hint.className = 'tl-unfiled';
+      hint.textContent = 'Tagged as a long conversation but never filed. '
+        + 'Open one and use "File under…" to put it on a topic’s timeline.';
+      timelineScroll.appendChild(hint);
+    }
+
+    const ordered = newestFirst ? topic.entries.slice().reverse() : topic.entries.slice();
+    const timeline = document.createElement('div');
+    timeline.className = 'timeline';
+
+    ordered.forEach((entry, idx) => {
+      const prev = idx > 0 ? ordered[idx - 1] : null;
+      if(prev){
+        const gap = daysBetween(prev.timestamp, entry.timestamp);
+        if(gap >= GAP_DAYS){
+          const gapRow = document.createElement('div');
+          gapRow.className = 'tl-gap';
+          gapRow.textContent = gap + (gap === 1 ? ' day gap' : ' day gap');
+          timeline.appendChild(gapRow);
+        }
+      }
+
+      const item = document.createElement('div');
+      item.className = 'tl-item';
+
+      const when = document.createElement('div');
+      when.className = 'tl-when';
+      const sameDayAsPrev = prev && dateKey(prev.timestamp) === dateKey(entry.timestamp);
+      if(!sameDayAsPrev){
+        const day = document.createElement('span');
+        day.className = 'tl-day';
+        day.textContent = formatDay(entry.timestamp);
+        when.appendChild(day);
+        when.append(formatYear(entry.timestamp));
+      }
+
+      const dotCell = document.createElement('div');
+      dotCell.className = 'tl-dot-cell';
+      const dot = document.createElement('span');
+      dot.className = 'tl-dot';
+      const firstCategory = (entry.categories || [])[0];
+      if(firstCategory) dot.style.background = tagColor(firstCategory);
+      dotCell.appendChild(dot);
+
+      item.appendChild(when);
+      item.appendChild(dotCell);
+      item.appendChild(buildCard(entry));
+      timeline.appendChild(item);
+    });
+
+    timelineScroll.appendChild(timeline);
+  }
+
+  function selectTopic(name){
+    currentTopic = name;
+    location.hash = 'topic-' + encodeURIComponent(name);
+    renderSidebar();
+    renderHead(findTopic(name));
+    renderTimeline();
+    timelineScroll.scrollTop = 0;
+  }
+
+  /* open a card and flash it -- used by the tick strip */
+  function revealEntry(id){
+    const card = document.getElementById('tl-' + id);
+    if(!card) return;
+    const body = card.querySelector('.tl-card-body');
+    if(body.hidden){
+      body.hidden = false;
+      card.classList.add('open');
+    }
+    card.scrollIntoView({ behavior:'smooth', block:'center' });
+    card.classList.remove('flash');
+    void card.offsetWidth;
+    card.classList.add('flash');
+  }
+
+  /* keeps browser back/forward working between topics, including the hash that
+     filing an entry pushes */
+  window.addEventListener('hashchange', () => {
+    const wanted = topicFromHash();
+    if(wanted && wanted !== currentTopic && findTopic(wanted)) selectTopic(wanted);
+  });
+
+  orderBtn.addEventListener('click', () => {
+    newestFirst = !newestFirst;
+    orderBtn.textContent = newestFirst ? 'Newest first' : 'Oldest first';
+    renderTimeline();
+  });
+
+  document.getElementById('sidebar-toggle').addEventListener('click', () => {
+    const sidebar = document.getElementById('sidebar');
+    const btn = document.getElementById('sidebar-toggle');
+    sidebar.classList.toggle('collapsed');
+    btn.innerHTML = sidebar.classList.contains('collapsed') ? '&rsaquo;' : '&lsaquo;';
+  });
+
+  /* ---------- expand modal ---------- */
+  let modalEntry = null;
+  const modalEl = document.getElementById('entry-modal');
+  const modalTitleEl = document.getElementById('modal-title');
+  const modalPreviewEl = document.getElementById('modal-preview');
+  const modalEditorEl = document.getElementById('modal-editor');
+  const modalTabPreview = document.getElementById('modal-tab-preview');
+  const modalTabEdit = document.getElementById('modal-tab-edit');
+
+  function openEntryModal(entry){
+    modalEntry = entry;
+    modalTitleEl.textContent = entry.title || '(untitled)';
+    modalEditorEl.value = entry.content || '';
+    switchModalTab('preview');
+    modalEl.hidden = false;
+  }
+
+  function closeEntryModal(){
+    modalEl.hidden = true;
+    modalEntry = null;
+  }
+
+  function switchModalTab(tab){
+    if(tab === 'preview'){
+      modalPreviewEl.hidden = false;
+      modalEditorEl.hidden = true;
+      modalTabPreview.classList.add('active');
+      modalTabEdit.classList.remove('active');
+      renderMarkdown(modalPreviewEl, modalEditorEl.value);
+    } else {
+      modalPreviewEl.hidden = true;
+      modalEditorEl.hidden = false;
+      modalTabEdit.classList.add('active');
+      modalTabPreview.classList.remove('active');
+    }
+  }
+
+  modalTabPreview.addEventListener('click', () => switchModalTab('preview'));
+  modalTabEdit.addEventListener('click', () => switchModalTab('edit'));
+  document.getElementById('modal-close').addEventListener('click', closeEntryModal);
+  document.getElementById('modal-cancel').addEventListener('click', closeEntryModal);
+  modalEl.addEventListener('click', (e) => {
+    if(e.target === modalEl) closeEntryModal();
+  });
+  document.getElementById('modal-save').addEventListener('click', async () => {
+    if(!modalEntry) return;
+    const entry = modalEntry;
+    entry.content = modalEditorEl.value;
+    closeEntryModal();
+    await saveEntry(entry);
+    renderTimeline();
+    revealEntry(entry.id);
+  });
+
+  /* ---------- server sync ---------- */
+  async function saveEntry(entry){
+    statusEl.textContent = 'Saving…';
+    statusEl.className = 'save-status';
+    try{
+      const res = await fetch('/api/log/entry', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(entry)
+      });
+      if(!res.ok) throw new Error('save failed');
+      statusEl.textContent = 'Saved';
+      statusEl.className = 'save-status ok';
+    }catch(err){
+      statusEl.textContent = 'Save failed — is the server running?';
+      statusEl.className = 'save-status err';
+    }
+  }
+
+  function topicFromHash(){
+    if(!location.hash.startsWith('#topic-')) return null;
+    try{
+      return decodeURIComponent(location.hash.slice('#topic-'.length));
+    }catch(err){
+      return null;
+    }
+  }
+
+  async function loadStore(){
+    try{
+      const res = await fetch('/api/log');
+      if(!res.ok) throw new Error('server responded ' + res.status);
+      store = await res.json();
+      statusEl.textContent = '';
+      statusEl.className = 'save-status';
+    }catch(err){
+      timelineScroll.innerHTML = '<div class="load-error">Could not reach the log server.<br>'
+        + 'Make sure <code>server.py</code> is running and you opened this page as '
+        + '<code>http://localhost:8420/long</code> — not by double-clicking the file.</div>';
+      statusEl.textContent = 'Not connected';
+      statusEl.className = 'save-status err';
+      return;
+    }
+
+    buildTopics();
+    renderSidebar();
+
+    if(topics.length === 0){
+      renderHead(null);
+      timelineScroll.innerHTML = '<div class="empty-hint">No long conversations yet. '
+        + 'Tag an entry <code>LONG CONVERSATION</code> on the Ai Log page and give it a topic '
+        + 'to start a timeline.</div>';
+      return;
+    }
+
+    const wanted = topicFromHash();
+    selectTopic(findTopic(wanted) ? wanted : topics[0].name);
+  }
+
+  loadStore();
+})();
+</script>
+</body>
+</html>

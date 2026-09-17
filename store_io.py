@@ -42,12 +42,17 @@ SHARD_PREFIX = 'ai_log_data_'
 SHARD_SUFFIX = '.json'
 DEFAULT_SHARD_SIZE = 500
 
+# Entries carrying this category also carry a "topic" field, and are grouped
+# into per-topic timelines by the Long Conversation page.
+LONG_CONVERSATION_TAG = 'LONG CONVERSATION'
+
 SEED_TAGS = {
     "idea": "#6c8ebf",
     "bug": "#d1584f",
     "decision": "#6fa273",
     "note": "#9b8f6b",
-    "PROMPT!": "#ff8a3d"
+    "PROMPT!": "#ff8a3d",
+    LONG_CONVERSATION_TAG: "#3f8f8a"
 }
 
 

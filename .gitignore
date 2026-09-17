@@ -5,3 +5,6 @@ ai_log_data_*.json
 *.pyc
 __pycache__/
 .claude/
+
+# personal spec documents read by the Spec Organization page at runtime
+markdownAssets/

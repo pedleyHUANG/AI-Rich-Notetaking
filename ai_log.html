@@ -36,9 +36,56 @@
   input, textarea{ font-family: var(--font-content); }
   #search-title{ font-family: var(--font-system); }
 
+  .page{
+    display:flex;
+    flex-direction:column;
+    height:100vh;
+    overflow:hidden;
+  }
+
+  /* ---------- Top tab bar ---------- */
+  .topbar{
+    display:flex;
+    align-items:center;
+    gap:22px;
+    height:44px;
+    flex-shrink:0;
+    padding: 0 16px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+  }
+  .topbar-tabs{ display:flex; align-items:stretch; height:100%; gap:4px; }
+  .topbar-tab{
+    display:flex; align-items:center;
+    font-family: var(--font-title);
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    color: var(--text-dim);
+    text-decoration:none;
+    padding: 0 6px;
+    border-bottom: 2px solid transparent;
+    transition: color .15s ease, border-color .15s ease;
+  }
+  .topbar-tab:hover{ color: var(--text); }
+  .topbar-tab.active{ color: var(--text); border-bottom-color: var(--prompt); }
+  .topbar-profile{
+    display:flex; align-items:center; gap:8px;
+    margin-left:auto;
+    color: var(--text-dim);
+  }
+  .topbar-avatar{
+    width:26px; height:26px; border-radius:50%; flex-shrink:0;
+    background: var(--surface-alt); border: 1px solid var(--border);
+    display:flex; align-items:center; justify-content:center;
+    font-family: var(--font-title); font-size:0.7rem; font-weight:700; color: var(--text-dim);
+  }
+  .topbar-profile-name{ font-family: var(--font-system); font-weight:400; font-size:0.8rem; }
+
   .app{
     display:flex;
-    height:100vh;
+    flex:1;
+    min-height:0;
     overflow:hidden;
   }
 
@@ -362,6 +409,15 @@
   .dropdown-toggle.open .chev{ transform: rotate(180deg); }
   .dropdown-pills{ display:flex; flex-wrap:wrap; gap:5px; margin-top:6px; }
   .dropdown-panel .chip-row{ padding: 8px 2px 2px; }
+  .dd-label.dd-empty{ color: var(--text-faint); }
+  /* a topic typed but not yet saved -- shown so the entry's fate is never a surprise */
+  .dd-label.dd-pending::after{ content:" · new"; color: var(--text-faint); }
+
+  /* ---------- long conversation topic ---------- */
+  .topic-new{ margin-top: 8px; }
+  .topic-new input[type=text]{ flex:1; }
+  .topic-link{ color:#3a6b46; text-decoration:none; border-bottom:1px solid var(--border); }
+  .topic-link:hover{ border-bottom-color:#3a6b46; }
 
   .tagchip-del{
     background:none; border:none; cursor:pointer; color: var(--text-faint);
@@ -467,6 +523,20 @@
 </style>
 </head>
 <body>
+<div class="page">
+
+  <header class="topbar">
+    <nav class="topbar-tabs">
+      <a class="topbar-tab active" href="/">Ai Log</a>
+      <a class="topbar-tab" href="/spec">Spec Organization</a>
+      <a class="topbar-tab" href="/long">Long Conversation</a>
+    </nav>
+    <div class="topbar-profile">
+      <span class="topbar-avatar">P</span>
+      <span class="topbar-profile-name">Pedley</span>
+    </div>
+  </header>
+
 <div class="app">
 
   <nav class="sidebar" id="sidebar">
@@ -515,11 +585,16 @@
       <label>Categories <span class="hint">(up to 6, optional)</span></label>
       <div class="chip-row" id="add-chips"></div>
 
+      <div id="topic-wrap" hidden>
+        <label>Topic <span class="hint">(which conversation)</span></label>
+        <div id="add-topic"></div>
+      </div>
+
       <label for="f-content">Content <span class="hint">(optional)</span></label>
       <textarea id="f-content" placeholder="Log content..."></textarea>
 
       <label class="backdate-label"><input type="checkbox" id="f-backdate"> Log this in the past</label>
-      <div class="row" id="backdate-fields" hidden>
+      <div class="row" id="backdate-fields">
         <input type="date" id="f-backdate-date">
         <select id="f-backdate-hour"></select>
       </div>
@@ -537,6 +612,8 @@
       <div class="tag-list" id="tag-list"></div>
     </section>
   </aside>
+
+</div>
 
 </div>
 
@@ -613,8 +690,13 @@
 <script>
 (function(){
 
+  const LONG_CONVERSATION_TAG = 'LONG CONVERSATION';
+  // typed topic text this long or longer is taken as meant, with no confirm click
+  const TOPIC_MIN_CHARS = 5;
+
   let store = { tags: {}, entries: [] };
   const addSelected = new Set();
+  const addTopic = { topic: '', pending: '' };
   const filterState = { searchText: '', tags: new Set() };
 
   const sidebarScroll = document.getElementById('sidebar-scroll');
@@ -622,6 +704,8 @@
   const addChipsEl = document.getElementById('add-chips');
   const tagListEl = document.getElementById('tag-list');
   const questionWrap = document.getElementById('question-wrap');
+  const topicWrap = document.getElementById('topic-wrap');
+  const addTopicEl = document.getElementById('add-topic');
   const statusEl = document.getElementById('save-status');
   const countEl = document.getElementById('entry-count');
   const searchInput = document.getElementById('search-title');
@@ -872,6 +956,125 @@
     });
   }
 
+  /* ---------- long conversation topics ---------- */
+
+  /* Topics aren't stored anywhere of their own -- the list is whatever topics
+     the LONG CONVERSATION entries already carry, most recently used first, so a
+     topic starts existing the moment the first entry lands in it. */
+  function longConversationTopics(){
+    const latest = new Map();
+    store.entries.forEach(e => {
+      if(!(e.categories || []).includes(LONG_CONVERSATION_TAG)) return;
+      const topic = (e.topic || '').trim();
+      if(!topic) return;
+      if(!latest.has(topic) || latest.get(topic) < e.timestamp) latest.set(topic, e.timestamp);
+    });
+    return Array.from(latest.keys()).sort((a, b) => latest.get(b).localeCompare(latest.get(a)));
+  }
+
+  /* Text typed into the "new topic" box counts on its own once it is
+     substantial, so a topic can't be lost by forgetting a confirm click. The
+     collapsed label previews whatever this returns, so the threshold is always
+     visible rather than a rule that silently eats short input. */
+  function pendingTopic(state){
+    const text = (state.pending || '').trim();
+    return text.length >= TOPIC_MIN_CHARS ? capitalizeWords(text) : '';
+  }
+
+  /* what a save should actually file the entry under */
+  function resolveTopic(state){
+    return pendingTopic(state) || state.topic || '';
+  }
+
+  /* Topic picker shown when LONG CONVERSATION is selected: existing topics as
+     chips, plus a field for naming a new one. Built from the same dropdown
+     parts as the category field directly above it. */
+  function buildTopicField(container, state){
+    container.innerHTML = '';
+    container.className = 'dropdown-wrap';
+
+    const toggle = document.createElement('button');
+    toggle.type = 'button';
+    toggle.className = 'dropdown-toggle';
+    toggle.innerHTML = '<span class="dd-label"></span><span class="chev">&#9662;</span>';
+
+    const collapsible = document.createElement('div');
+    collapsible.className = 'collapsible';
+    const inner = document.createElement('div');
+    inner.className = 'collapsible-inner';
+    const chipRow = document.createElement('div');
+    chipRow.className = 'chip-row';
+    const newRow = document.createElement('div');
+    newRow.className = 'row topic-new';
+    const newInput = document.createElement('input');
+    newInput.type = 'text';
+    newInput.placeholder = 'Type a new topic…';
+    // the field is rebuilt whenever the tag is re-selected, so restore what was typed
+    newInput.value = state.pending || '';
+    newRow.appendChild(newInput);
+    inner.appendChild(chipRow);
+    inner.appendChild(newRow);
+    collapsible.appendChild(inner);
+
+    function refreshLabel(){
+      const label = toggle.querySelector('.dd-label');
+      const pending = pendingTopic(state);
+      label.textContent = pending || state.topic || 'Choose topic';
+      label.classList.toggle('dd-empty', !pending && !state.topic);
+      label.classList.toggle('dd-pending', !!pending);
+    }
+
+    function buildChips(){
+      chipRow.innerHTML = '';
+      longConversationTopics().forEach(topic => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'chip' + (topic === state.topic ? ' selected' : '');
+        btn.textContent = topic;
+        btn.addEventListener('click', () => choose(topic));
+        chipRow.appendChild(btn);
+      });
+    }
+
+    function choose(topic){
+      state.topic = topic;
+      // picking from the list replaces whatever was half-typed
+      state.pending = '';
+      newInput.value = '';
+      refreshLabel();
+      buildChips();
+      closeCollapsible(toggle, collapsible);
+      refreshOpenHeight(container.closest('.collapsible'));
+    }
+
+    newInput.addEventListener('input', () => {
+      state.pending = newInput.value;
+      refreshLabel();
+    });
+    // Enter is an explicit commit, so it takes text too short to count on its own
+    newInput.addEventListener('keydown', (e) => {
+      if(e.key === 'Enter'){
+        e.preventDefault();
+        const typed = capitalizeWords(newInput.value.trim());
+        if(typed) choose(typed);
+      }
+    });
+
+    toggle.addEventListener('click', () => {
+      toggleCollapsible(toggle, collapsible);
+      const outer = container.closest('.collapsible');
+      requestAnimationFrame(() => {
+        if(outer && outer !== collapsible) refreshOpenHeight(outer);
+      });
+    });
+
+    buildChips();
+    refreshLabel();
+
+    container.appendChild(toggle);
+    container.appendChild(collapsible);
+  }
+
   /* dropdown wrapper around buildChipRow: a toggle button + selected-pills
      summary, with the chip row itself tucked into a collapsible panel --
      used by the add-entry form, inline edit forms, and the tag filter. */
@@ -910,6 +1113,12 @@
       });
       if(opts.questionWrap){
         opts.questionWrap.style.display = selectedSet.has('PROMPT!') ? 'none' : '';
+      }
+      if(opts.topicWrap){
+        const isLongConversation = selectedSet.has(LONG_CONVERSATION_TAG);
+        // rebuild on the way in so topics added since last time show up
+        if(isLongConversation && opts.topicWrap.hidden && opts.refreshTopic) opts.refreshTopic();
+        opts.topicWrap.hidden = !isLongConversation;
       }
     }
 
@@ -957,8 +1166,11 @@
   function refreshAddChips(){
     buildCategoryDropdownField(addChipsEl, addSelected, {
       placeholder: 'Categories (up to 6, optional)',
-      questionWrap: questionWrap
+      questionWrap: questionWrap,
+      topicWrap: topicWrap,
+      refreshTopic: () => buildTopicField(addTopicEl, addTopic)
     });
+    if(!topicWrap.hidden) buildTopicField(addTopicEl, addTopic);
   }
 
   /* ---------- tag manage list ---------- */
@@ -1034,6 +1246,16 @@
       bodyInner.appendChild(qf);
     }
 
+    if(entry.topic){
+      const tf = document.createElement('div');
+      tf.className = 'field';
+      tf.innerHTML = '<label>Topic</label><a class="field-text topic-link" href="/long"></a>';
+      const link = tf.querySelector('.topic-link');
+      link.textContent = entry.topic;
+      link.href = '/long#topic-' + encodeURIComponent(entry.topic);
+      bodyInner.appendChild(tf);
+    }
+
     const cf = document.createElement('div');
     cf.className = 'field';
     const contentText = entry.content ? entry.content : '';
@@ -1079,7 +1301,21 @@
     bodyInner.appendChild(catLabel);
     const chipsEl = document.createElement('div');
     bodyInner.appendChild(chipsEl);
-    buildCategoryDropdownField(chipsEl, editSelected, { placeholder: 'Categories', questionWrap: qWrap });
+
+    const editTopic = { topic: entry.topic || '', pending: '' };
+    const topicField = document.createElement('div');
+    topicField.innerHTML = '<label>Topic <span class="hint">(which conversation)</span></label>';
+    const topicMount = document.createElement('div');
+    topicField.appendChild(topicMount);
+    topicField.hidden = true;
+    bodyInner.appendChild(topicField);
+
+    buildCategoryDropdownField(chipsEl, editSelected, {
+      placeholder: 'Categories',
+      questionWrap: qWrap,
+      topicWrap: topicField,
+      refreshTopic: () => buildTopicField(topicMount, editTopic)
+    });
 
     const contentField = document.createElement('div');
     contentField.innerHTML = '<label>Content</label><button type="button" class="expand-edit-btn">Expand</button>';
@@ -1104,6 +1340,8 @@
       entry.question = editSelected.has('PROMPT!') ? '' : qInput.value.trim();
       entry.categories = Array.from(editSelected);
       entry.content = contentInput.value;
+      if(editSelected.has(LONG_CONVERSATION_TAG)) entry.topic = resolveTopic(editTopic);
+      else delete entry.topic;
       await commit(() => saveEntry(entry));
       selectEntry(entry.id);
     });
@@ -1207,6 +1445,8 @@
       statusEl.textContent = 'Saved';
       statusEl.className = 'save-status ok';
       renderAll();
+      // the Long Conversation timeline links here as /#entry-<id>
+      if(location.hash.startsWith('#entry-')) selectEntry(location.hash.slice('#entry-'.length));
     }catch(err){
       logRoot.innerHTML = '<div class="load-error">Could not reach the log server.<br>'
         + 'Make sure <code>server.py</code> is running and you opened this page as '
@@ -1269,7 +1509,6 @@
 
   /* ---------- add entry form ---------- */
   const backdateCheckbox = document.getElementById('f-backdate');
-  const backdateFields = document.getElementById('backdate-fields');
   const backdateDateInput = document.getElementById('f-backdate-date');
   const backdateHourSelect = document.getElementById('f-backdate-hour');
 
@@ -1280,15 +1519,35 @@
     backdateHourSelect.appendChild(opt);
   }
 
+  function seedBackdateHour(){
+    backdateHourSelect.value = String(new Date().getHours());
+  }
+
+  function todayValue(){
+    const now = new Date();
+    return now.getFullYear() + '-' + pad(now.getMonth()+1) + '-' + pad(now.getDate());
+  }
+
+  // start on the current hour so picking only a date doesn't quietly mean midnight
+  seedBackdateHour();
+
   backdateCheckbox.addEventListener('change', () => {
-    backdateFields.hidden = !backdateCheckbox.checked;
-    if(backdateCheckbox.checked){
-      const now = new Date();
-      if(!backdateDateInput.value){
-        backdateDateInput.value = now.getFullYear() + '-' + pad(now.getMonth()+1) + '-' + pad(now.getDate());
-      }
-      backdateHourSelect.value = String(now.getHours());
+    if(backdateCheckbox.checked && !backdateDateInput.value){
+      backdateDateInput.value = todayValue();
+      seedBackdateHour();
     }
+  });
+
+  /* Picking a date or an hour IS the request to backdate -- the checkbox follows
+     it rather than gating it. Setting .checked in code fires no change event, so
+     this never re-enters the handler above and overwrites a chosen hour. */
+  backdateDateInput.addEventListener('change', () => {
+    backdateCheckbox.checked = !!backdateDateInput.value;
+  });
+
+  backdateHourSelect.addEventListener('change', () => {
+    if(!backdateDateInput.value) backdateDateInput.value = todayValue();
+    backdateCheckbox.checked = true;
   });
 
   function entryTimestamp(){
@@ -1315,14 +1574,19 @@
       categories: Array.from(addSelected),
       content: contentInput.value
     };
+    if(addSelected.has(LONG_CONVERSATION_TAG)) entry.topic = resolveTopic(addTopic);
     store.entries.push(entry);
 
     titleInput.value = '';
     questionInput.value = '';
     contentInput.value = '';
     addSelected.clear();
+    addTopic.topic = '';
+    addTopic.pending = '';
+    topicWrap.hidden = true;
     backdateCheckbox.checked = false;
-    backdateFields.hidden = true;
+    backdateDateInput.value = '';
+    seedBackdateHour();
 
     await commit(() => saveEntry(entry));
     selectEntry(entry.id);

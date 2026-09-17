@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Spec Organization</title>
+<link rel="stylesheet" href="vendor/katex.min.css">
+<link rel="stylesheet" href="vendor/highlight-theme.min.css">
+<style>
+  :root{
+    --bg: #eef0f3;
+    --surface: #ffffff;
+    --surface-alt: #f5f6f8;
+    --border: #dde1e6;
+    --text: #1b1f24;
+    --text-dim: #5b6470;
+    --text-faint: #98a1ab;
+    --prompt: #ff8a3d;
+    --prompt-soft: rgba(255, 138, 61, 0.16);
+    --font-title: "Avenir Next", "Century Gothic", "Segoe UI", sans-serif;
+    --font-system: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    --font-content: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    --mono: ui-monospace, "SFMono-Regular", "IBM Plex Mono", Consolas, monospace;
+  }
+  *{ box-sizing: border-box; }
+  html, body{ height:100%; margin:0; }
+  body{
+    background: var(--bg);
+    color: var(--text-dim);
+    font-family: var(--font-system);
+    font-size: 0.85rem;
+    font-weight: 300;
+    line-height: 1.5;
+  }
+  button, select{ font-family: inherit; }
+  input, textarea{ font-family: var(--font-content); }
+
+  .page{
+    display:flex;
+    flex-direction:column;
+    height:100vh;
+    overflow:hidden;
+  }
+
+  /* ---------- Top tab bar ---------- */
+  .topbar{
+    display:flex;
+    align-items:center;
+    gap:22px;
+    height:44px;
+    flex-shrink:0;
+    padding: 0 16px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+  }
+  .topbar-tabs{ display:flex; align-items:stretch; height:100%; gap:4px; }
+  .topbar-tab{
+    display:flex; align-items:center;
+    font-family: var(--font-title);
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    color: var(--text-dim);
+    text-decoration:none;
+    padding: 0 6px;
+    border-bottom: 2px solid transparent;
+    transition: color .15s ease, border-color .15s ease;
+  }
+  .topbar-tab:hover{ color: var(--text); }
+  .topbar-tab.active{ color: var(--text); border-bottom-color: var(--prompt); }
+  .topbar-profile{
+    display:flex; align-items:center; gap:8px;
+    margin-left:auto;
+    color: var(--text-dim);
+  }
+  .topbar-avatar{
+    width:26px; height:26px; border-radius:50%; flex-shrink:0;
+    background: var(--surface-alt); border: 1px solid var(--border);
+    display:flex; align-items:center; justify-content:center;
+    font-family: var(--font-title); font-size:0.7rem; font-weight:700; color: var(--text-dim);
+  }
+  .topbar-profile-name{ font-family: var(--font-system); font-weight:400; font-size:0.8rem; }
+
+  .app{
+    display:flex;
+    flex:1;
+    min-height:0;
+    overflow:hidden;
+  }
+
+  /* ---------- Sidebar ---------- */
+  .sidebar{
+    width: 22%;
+    min-width: 190px;
+    max-width: 280px;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    display:flex;
+    flex-direction:column;
+    transition: width .2s ease, min-width .2s ease;
+    flex-shrink:0;
+  }
+  .sidebar.collapsed{ width: 48px; min-width: 48px; }
+  .sidebar-head{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding: 14px 12px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink:0;
+  }
+  .sidebar-title{
+    font-family: var(--font-title);
+    letter-spacing: 0.08em;
+    font-weight: 700;
+    color: var(--text);
+  }
+  .sidebar.collapsed .sidebar-title{ display:none; }
+  #sidebar-toggle{
+    background:none; border:1px solid var(--border); border-radius:5px;
+    width:26px; height:26px; cursor:pointer; color: var(--text-dim);
+    display:flex; align-items:center; justify-content:center; font-size:0.9rem;
+    flex-shrink:0;
+  }
+  #sidebar-toggle:hover{ background: var(--surface-alt); }
+  .sidebar-scroll{
+    overflow-y:auto;
+    flex:1;
+    padding: 6px 0 20px;
+  }
+  .sidebar.collapsed .sidebar-scroll{ display:none; }
+
+  .file-list{ padding: 2px 0 6px; }
+  .file-row{
+    display:block;
+    width: calc(100% - 24px);
+    margin: 0 0 4px 12px;
+    text-align:left;
+    background:none;
+    border:none;
+    border-left: 2px solid var(--border);
+    cursor:pointer;
+    padding: 8px 10px;
+    font-family: var(--font-content);
+    font-weight: 400;
+    color: var(--text);
+    transition: background-color .15s ease, border-color .15s ease;
+  }
+  .file-row:hover{
+    background: var(--surface-alt);
+    border-left-color: var(--text-dim);
+  }
+  .file-row.active{
+    background: var(--surface-alt);
+    border-left-color: var(--prompt);
+    font-weight: 600;
+  }
+  .sidebar-empty{ color: var(--text-faint); font-style: italic; padding: 8px 14px; }
+
+  /* ---------- Center ---------- */
+  .center{
+    flex:1;
+    min-width: 0;
+    display:flex;
+    flex-direction:column;
+    overflow:hidden;
+  }
+  .center-head{
+    display:flex;
+    align-items:baseline;
+    gap:14px;
+    border-bottom: 1px solid var(--border);
+    padding: 18px 32px 14px;
+    flex-shrink:0;
+  }
+  .center-head .center-title{
+    font-family: var(--font-title);
+    font-size: 0.85rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    color: var(--text);
+  }
+  .center-head .file-name{
+    font-family: var(--font-content);
+    font-weight: 700;
+    color: var(--text);
+  }
+  .view-tabs{ display:flex; gap:4px; margin-left:auto; }
+  .view-tabs[hidden]{ display:none; }
+  .view-tabs button{
+    background:none; border:1px solid var(--border); border-radius:5px; padding:5px 12px;
+    cursor:pointer;
+  }
+  .view-tabs button.active{ background: var(--surface-alt); font-weight:600; border-color: var(--text-faint); }
+  .save-status{ margin-left:12px; }
+  .save-status.err{ color: #b5453d; }
+  .save-status.ok{ color: #4c8a58; }
+
+  .spec-body{
+    flex:1;
+    min-height:0;
+    overflow-y:auto;
+    padding: 22px 32px 60px;
+  }
+  .spec-empty{ color: var(--text-faint); font-style: italic; }
+
+  #spec-editor{
+    width:100%;
+    height:100%;
+    min-height: 60vh;
+    background: var(--surface-alt);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 0.82rem;
+    line-height:1.5;
+    padding: 14px 16px;
+    resize: vertical;
+  }
+  #spec-editor:focus{ outline: 2px solid #b8c6d9; outline-offset:1px; }
+
+  button.primary{
+    background:#e9f1eb; border: 1px solid #bcd9c2; color:#3a6b46;
+    border-radius: 6px; padding: 9px 14px; cursor:pointer; font-weight:600;
+  }
+  button.primary:hover{ border-color:#3a6b46; }
+  button.primary:disabled{ opacity:0.5; cursor:default; }
+
+  /* ---------- rendered markdown ---------- */
+  .rendered-content{ font-family: var(--font-content); font-weight: 400; color: var(--text); line-height:1.55; }
+  .rendered-content p{ margin: 0 0 0.7em; }
+  .rendered-content p:last-child{ margin-bottom:0; }
+  .rendered-content pre{
+    background:#1e1e1e; border-radius:6px; padding:10px 12px; overflow-x:auto;
+    font-size:0.8rem; margin: 0.6em 0;
+  }
+  .rendered-content pre code{ font-family: var(--mono); background:none; padding:0; }
+  .rendered-content code{
+    font-family: var(--mono); background: var(--surface-alt); border-radius:4px; padding:1px 5px; font-size:0.85em;
+  }
+  .rendered-content ul, .rendered-content ol{ margin: 0.4em 0; padding-left: 1.4em; }
+  .rendered-content blockquote{
+    border-left: 3px solid var(--border); margin: 0.6em 0; padding: 2px 12px;
+  }
+  .rendered-content h1, .rendered-content h2, .rendered-content h3{
+    font-family: var(--font-content); margin: 0.6em 0 0.3em;
+  }
+  .rendered-content table{ border-collapse:collapse; margin: 0.6em 0; }
+  .rendered-content th, .rendered-content td{ border:1px solid var(--border); padding:4px 8px; }
+  .rendered-content a{ color:#3a6b46; }
+  .rendered-content img{ max-width:100%; }
+
+  .load-error{
+    background: #fdf1ef; border: 1px solid #f0c9c2; color: #8a3a30;
+    border-radius: 8px; padding: 16px 18px;
+  }
+  .load-error code{ background: rgba(0,0,0,0.06); padding: 1px 5px; border-radius: 4px; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <header class="topbar">
+    <nav class="topbar-tabs">
+      <a class="topbar-tab" href="/">Ai Log</a>
+      <a class="topbar-tab active" href="/spec">Spec Organization</a>
+      <a class="topbar-tab" href="/long">Long Conversation</a>
+    </nav>
+    <div class="topbar-profile">
+      <span class="topbar-avatar">P</span>
+      <span class="topbar-profile-name">Pedley</span>
+    </div>
+  </header>
+
+<div class="app">
+
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-head">
+      <span class="sidebar-title">SPEC INDEX</span>
+      <button id="sidebar-toggle" aria-label="Toggle sidebar">&lsaquo;</button>
+    </div>
+    <div class="sidebar-scroll" id="sidebar-scroll"></div>
+  </nav>
+
+  <main class="center">
+    <div class="center-head">
+      <span class="center-title">SPEC</span>
+      <span class="file-name" id="file-name"></span>
+      <div class="view-tabs" id="view-tabs" hidden>
+        <button type="button" data-tab="preview" class="active" id="tab-preview">Preview</button>
+        <button type="button" data-tab="edit" id="tab-edit">Edit</button>
+      </div>
+      <button class="primary" id="save-btn" hidden>Save</button>
+      <span class="save-status" id="save-status"></span>
+    </div>
+    <div class="spec-body" id="spec-body">
+      <div class="spec-empty">Select a file from the sidebar to preview or edit it.</div>
+    </div>
+  </main>
+
+</div>
+</div>
+
+<script src="vendor/marked.min.js"></script>
+<script src="vendor/dompurify.min.js"></script>
+<script src="vendor/highlight.min.js"></script>
+<script src="vendor/hljs-lang/python.min.js"></script>
+<script src="vendor/hljs-lang/javascript.min.js"></script>
+<script src="vendor/hljs-lang/typescript.min.js"></script>
+<script src="vendor/hljs-lang/bash.min.js"></script>
+<script src="vendor/hljs-lang/json.min.js"></script>
+<script src="vendor/hljs-lang/xml.min.js"></script>
+<script src="vendor/hljs-lang/css.min.js"></script>
+<script src="vendor/hljs-lang/c.min.js"></script>
+<script src="vendor/hljs-lang/cpp.min.js"></script>
+<script src="vendor/hljs-lang/java.min.js"></script>
+<script src="vendor/hljs-lang/sql.min.js"></script>
+<script src="vendor/hljs-lang/yaml.min.js"></script>
+<script src="vendor/katex.min.js"></script>
+<script src="vendor/katex-auto-render.min.js"></script>
+<script>
+(function(){
+
+  let files = [];
+  let current = null; // { name, content }
+  let activeTab = 'preview';
+
+  const sidebarScroll = document.getElementById('sidebar-scroll');
+  const specBody = document.getElementById('spec-body');
+  const fileNameEl = document.getElementById('file-name');
+  const viewTabs = document.getElementById('view-tabs');
+  const tabPreview = document.getElementById('tab-preview');
+  const tabEdit = document.getElementById('tab-edit');
+  const saveBtn = document.getElementById('save-btn');
+  const statusEl = document.getElementById('save-status');
+
+  /* ---------- markdown rendering (same approach as the Ai Log page) ---------- */
+  let markedConfigured = false;
+  function configureMarked(){
+    if(markedConfigured) return;
+    marked.setOptions({ breaks: true, gfm: true });
+    const renderer = new marked.Renderer();
+    renderer.code = function(code, infostring){
+      const lang = (infostring || '').trim().split(/\s+/)[0];
+      let highlighted;
+      if(window.hljs && lang && hljs.getLanguage(lang)){
+        highlighted = hljs.highlight(code, { language: lang }).value;
+      } else if(window.hljs){
+        highlighted = hljs.highlightAuto(code).value;
+      } else {
+        highlighted = code.replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+      }
+      return '<pre><code class="hljs' + (lang ? ' language-' + lang : '') + '">' + highlighted + '</code></pre>';
+    };
+    marked.use({ renderer });
+    markedConfigured = true;
+  }
+
+  function renderMarkdown(el, text){
+    configureMarked();
+    const rawHtml = marked.parse(text || '');
+    el.innerHTML = window.DOMPurify ? DOMPurify.sanitize(rawHtml, { ADD_ATTR: ['target'] }) : rawHtml;
+    if(window.renderMathInElement){
+      renderMathInElement(el, {
+        delimiters: [
+          { left: '$$', right: '$$', display: true },
+          { left: '$', right: '$', display: false },
+          { left: '\\(', right: '\\)', display: false },
+          { left: '\\[', right: '\\]', display: true }
+        ],
+        throwOnError: false
+      });
+    }
+  }
+
+  /* ---------- sidebar ---------- */
+  function renderSidebar(){
+    sidebarScroll.innerHTML = '';
+    if(files.length === 0){
+      sidebarScroll.innerHTML = '<div class="sidebar-empty">No markdown files in markdownAssets/.</div>';
+      return;
+    }
+    const list = document.createElement('div');
+    list.className = 'file-list';
+    files.forEach(name => {
+      const row = document.createElement('button');
+      row.className = 'file-row' + (current && current.name === name ? ' active' : '');
+      row.textContent = name;
+      row.addEventListener('click', () => selectFile(name));
+      list.appendChild(row);
+    });
+    sidebarScroll.appendChild(list);
+  }
+
+  /* ---------- preview / edit body ---------- */
+  function renderBody(){
+    specBody.innerHTML = '';
+    if(!current){
+      specBody.innerHTML = '<div class="spec-empty">Select a file from the sidebar to preview or edit it.</div>';
+      return;
+    }
+    const preview = document.createElement('div');
+    preview.className = 'rendered-content';
+    preview.id = 'spec-preview';
+    const editor = document.createElement('textarea');
+    editor.id = 'spec-editor';
+    editor.value = current.content;
+
+    if(activeTab === 'preview'){
+      editor.hidden = true;
+      renderMarkdown(preview, current.content);
+    } else {
+      preview.hidden = true;
+    }
+
+    specBody.appendChild(preview);
+    specBody.appendChild(editor);
+  }
+
+  function switchTab(tab){
+    activeTab = tab;
+    tabPreview.classList.toggle('active', tab === 'preview');
+    tabEdit.classList.toggle('active', tab === 'edit');
+    if(tab === 'preview' && current){
+      const editor = document.getElementById('spec-editor');
+      if(editor) current.content = editor.value;
+    }
+    renderBody();
+  }
+
+  tabPreview.addEventListener('click', () => switchTab('preview'));
+  tabEdit.addEventListener('click', () => switchTab('edit'));
+
+  /* ---------- server sync ---------- */
+  async function loadFileList(){
+    try{
+      const res = await fetch('/api/markdown/list');
+      if(!res.ok) throw new Error('server responded ' + res.status);
+      const data = await res.json();
+      files = data.files || [];
+      renderSidebar();
+    }catch(err){
+      sidebarScroll.innerHTML = '';
+      specBody.innerHTML = '<div class="load-error">Could not reach the log server.<br>'
+        + 'Make sure <code>server.py</code> is running and you opened this page as '
+        + '<code>http://localhost:8420/spec</code> — not by double-clicking the file.</div>';
+    }
+  }
+
+  async function selectFile(name){
+    try{
+      const res = await fetch('/api/markdown/file?name=' + encodeURIComponent(name));
+      if(!res.ok) throw new Error('server responded ' + res.status);
+      const data = await res.json();
+      current = { name, content: data.content || '' };
+      activeTab = 'preview';
+      fileNameEl.textContent = name;
+      viewTabs.hidden = false;
+      saveBtn.hidden = false;
+      statusEl.textContent = '';
+      statusEl.className = 'save-status';
+      tabPreview.classList.add('active');
+      tabEdit.classList.remove('active');
+      renderSidebar();
+      renderBody();
+    }catch(err){
+      statusEl.textContent = 'Could not load file';
+      statusEl.className = 'save-status err';
+    }
+  }
+
+  saveBtn.addEventListener('click', async () => {
+    if(!current) return;
+    const editor = document.getElementById('spec-editor');
+    if(editor) current.content = editor.value;
+    statusEl.textContent = 'Saving…';
+    statusEl.className = 'save-status';
+    try{
+      const res = await fetch('/api/markdown/save', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ name: current.name, content: current.content })
+      });
+      if(!res.ok) throw new Error('save failed');
+      statusEl.textContent = 'Saved';
+      statusEl.className = 'save-status ok';
+      if(activeTab === 'preview') renderBody();
+    }catch(err){
+      statusEl.textContent = 'Save failed — is the server running?';
+      statusEl.className = 'save-status err';
+    }
+  });
+
+  /* ---------- sidebar collapse toggle ---------- */
+  document.getElementById('sidebar-toggle').addEventListener('click', () => {
+    const sidebar = document.getElementById('sidebar');
+    const btn = document.getElementById('sidebar-toggle');
+    sidebar.classList.toggle('collapsed');
+    btn.innerHTML = sidebar.classList.contains('collapsed') ? '&rsaquo;' : '&lsaquo;';
+  });
+
+  loadFileList();
+})();
+</script>
+</body>
+</html>
