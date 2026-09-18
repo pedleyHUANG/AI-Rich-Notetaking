@@ -16,7 +16,8 @@ The Spec Organization page reads and writes markdown files under
 markdownAssets/ through a small JSON API of its own:
   GET  /api/markdown/list          -> {"files": ["a.md", "b.md", ...]}
   GET  /api/markdown/file?name=... -> {"content": "..."}
-  POST /api/markdown/save          -> body {"name": "...", "content": "..."}
+  POST /api/markdown/save          -> body {"name": "...", "content": "..."}; overwrites an existing file
+  POST /api/markdown/create        -> same body; makes a NEW file and refuses (409) to overwrite one
 
 Each of these writes touches only the data it changed (see store_io.py's
 upsert_entry/delete_entry/upsert_tag/delete_tag) instead of replacing the
@@ -55,6 +56,7 @@ DEFAULT_HTML_FILE = 'ai_log.html'
 SPEC_HTML_FILE = 'spec_organization.html'
 LONG_HTML_FILE = 'long_conversation.html'
 MARKDOWN_ASSETS_DIR = 'markdownAssets'
+MAX_SPEC_NAME_CHARS = 100
 
 mimetypes.add_type('font/woff2', '.woff2')
 
@@ -164,7 +166,7 @@ def make_handler(data_dir: Path, html_path: Path, root_dir: Path):
         def do_POST(self):
             if self.path not in ('/api/log/entry', '/api/log/entry/delete',
                                   '/api/log/tag', '/api/log/tag/delete',
-                                  '/api/markdown/save'):
+                                  '/api/markdown/save', '/api/markdown/create'):
                 self._send_json({'error': 'not found'}, status=404)
                 return
             try:
@@ -183,6 +185,30 @@ def make_handler(data_dir: Path, html_path: Path, root_dir: Path):
                     return
                 md_path.write_text(body['content'], encoding='utf-8')
                 self._send_json({'ok': True})
+
+            elif self.path == '/api/markdown/create':
+                if (not isinstance(body, dict) or not isinstance(body.get('name'), str)
+                        or not isinstance(body.get('content'), str)):
+                    self._send_json({'error': 'body must contain string "name" and "content"'}, status=400)
+                    return
+                name = body['name']
+                # letters and digits only: no separators, dots or spaces to smuggle a path in
+                stem = name[:-3] if name.endswith('.md') else ''
+                if not stem or len(stem) > MAX_SPEC_NAME_CHARS or not stem.isalnum():
+                    self._send_json({'error': 'a spec name is letters and digits followed by .md'}, status=400)
+                    return
+                markdown_root.mkdir(exist_ok=True)
+                if any(p.name.casefold() == name.casefold() for p in markdown_root.iterdir()):
+                    self._send_json({'error': f'{name} already exists'}, status=409)
+                    return
+                try:
+                    # 'x' fails if the file appeared since the check above
+                    with open(markdown_root / name, 'x', encoding='utf-8') as handle:
+                        handle.write(body['content'])
+                except FileExistsError:
+                    self._send_json({'error': f'{name} already exists'}, status=409)
+                    return
+                self._send_json({'ok': True, 'name': name})
 
             elif self.path == '/api/log/entry':
                 if not isinstance(body, dict) or not body.get('id'):

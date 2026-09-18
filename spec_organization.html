@@ -196,6 +196,42 @@
   .save-status.err{ color: #b5453d; }
   .save-status.ok{ color: #4c8a58; }
 
+  /* ---------- add new spec ---------- */
+  .file-row.add-row{ color:#3a6b46; font-weight:600; }
+  .file-row.add-row .draft-dot{
+    display:inline-block; width:7px; height:7px; border-radius:50%;
+    background: var(--prompt); margin-left:8px; vertical-align:middle;
+  }
+  .title-input{
+    flex:1;
+    min-width: 160px;
+    max-width: 420px;
+    background: var(--surface-alt);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    color: var(--text);
+    font-family: var(--font-content);
+    font-weight: 700;
+    padding: 6px 10px;
+  }
+  .title-input:focus{ outline: 2px solid #b8c6d9; outline-offset:1px; }
+  .title-input[hidden]{ display:none; }
+  /* the filename the title will produce -- shown before Save so the rule is never a surprise */
+  .new-spec-hint{
+    flex-shrink:0;
+    padding: 8px 32px;
+    border-bottom: 1px solid var(--border);
+    color: var(--text-faint);
+    font-size: 0.78rem;
+  }
+  .new-spec-hint[hidden]{ display:none; }
+  .new-spec-hint code{
+    font-family: var(--mono); font-size: 0.95em; color: var(--text);
+    background: var(--surface-alt); border-radius:4px; padding:1px 5px;
+  }
+  .new-spec-hint.warn{ color:#a85a1f; }
+  .new-spec-hint.err{ color:#b5453d; }
+
   .spec-body{
     flex:1;
     min-height:0;
@@ -287,6 +323,7 @@
     <div class="center-head">
       <span class="center-title">SPEC</span>
       <span class="file-name" id="file-name"></span>
+      <input type="text" class="title-input" id="new-spec-title" placeholder="Spec title" autocomplete="off" hidden>
       <div class="view-tabs" id="view-tabs" hidden>
         <button type="button" data-tab="preview" class="active" id="tab-preview">Preview</button>
         <button type="button" data-tab="edit" id="tab-edit">Edit</button>
@@ -294,8 +331,9 @@
       <button class="primary" id="save-btn" hidden>Save</button>
       <span class="save-status" id="save-status"></span>
     </div>
+    <div class="new-spec-hint" id="new-spec-hint" hidden></div>
     <div class="spec-body" id="spec-body">
-      <div class="spec-empty">Select a file from the sidebar to preview or edit it.</div>
+      <div class="spec-empty">Select a spec from the sidebar to preview or edit it, or add a new one.</div>
     </div>
   </main>
 
@@ -322,18 +360,38 @@
 <script>
 (function(){
 
+  // the server rejects longer names, so the filename hint says so before Save does
+  const MAX_SPEC_NAME_CHARS = 100;
+
   let files = [];
   let current = null; // { name, content }
   let activeTab = 'preview';
 
+  /* A new spec being written. The draft lives here rather than in the DOM so it
+     survives browsing to another spec and back: `creating` says whether its pane
+     is showing, `newSpec` is the text (null once saved or never started). */
+  let creating = false;
+  let newSpec = null; // { title, content }
+  let saving = false;
+  let serverError = '';
+
   const sidebarScroll = document.getElementById('sidebar-scroll');
   const specBody = document.getElementById('spec-body');
   const fileNameEl = document.getElementById('file-name');
+  const titleInput = document.getElementById('new-spec-title');
+  const hintEl = document.getElementById('new-spec-hint');
   const viewTabs = document.getElementById('view-tabs');
   const tabPreview = document.getElementById('tab-preview');
   const tabEdit = document.getElementById('tab-edit');
   const saveBtn = document.getElementById('save-btn');
   const statusEl = document.getElementById('save-status');
+
+  // the document the Preview/Edit tabs are showing: the draft while creating
+  function activeDoc(){ return creating ? newSpec : current; }
+
+  function draftHasText(){
+    return !!(newSpec && (newSpec.title.trim() || newSpec.content.trim()));
+  }
 
   /* ---------- markdown rendering (same approach as the Ai Log page) ---------- */
   let markedConfigured = false;
@@ -377,27 +435,134 @@
   /* ---------- sidebar ---------- */
   function renderSidebar(){
     sidebarScroll.innerHTML = '';
-    if(files.length === 0){
-      sidebarScroll.innerHTML = '<div class="sidebar-empty">No markdown files in markdownAssets/.</div>';
-      return;
-    }
     const list = document.createElement('div');
     list.className = 'file-list';
+
+    // always first, and present even when the directory is empty -- that is
+    // exactly when it is needed
+    const addRow = document.createElement('button');
+    addRow.id = 'add-spec-row';
+    addRow.className = 'file-row add-row' + (creating ? ' active' : '');
+    addRow.textContent = '+ Add New Spec';
+    if(!creating && draftHasText()){
+      const dot = document.createElement('span');
+      dot.className = 'draft-dot';
+      dot.title = 'Unsaved draft';
+      addRow.appendChild(dot);
+    }
+    addRow.addEventListener('click', openNewSpec);
+    list.appendChild(addRow);
+
     files.forEach(name => {
       const row = document.createElement('button');
-      row.className = 'file-row' + (current && current.name === name ? ' active' : '');
+      row.className = 'file-row' + (!creating && current && current.name === name ? ' active' : '');
       row.textContent = name;
       row.addEventListener('click', () => selectFile(name));
       list.appendChild(row);
     });
     sidebarScroll.appendChild(list);
+
+    if(files.length === 0){
+      const empty = document.createElement('div');
+      empty.className = 'sidebar-empty';
+      empty.textContent = 'No specs yet.';
+      sidebarScroll.appendChild(empty);
+    }
+  }
+
+  /* ---------- new spec: title -> filename ---------- */
+
+  /* camelCase the title into a filename: "Korean Note Generation" ->
+     koreanNoteGeneration.md. Anything that isn't a letter or digit separates
+     words, which is also all the server will accept in a spec name. */
+  function filenameFromTitle(title){
+    const words = title.split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+    if(words.length === 0) return '';
+    const stem = words.map((word, i) => {
+      const chars = Array.from(word.toLowerCase());
+      return i === 0 ? chars.join('') : chars[0].toUpperCase() + chars.slice(1).join('');
+    }).join('');
+    return stem + '.md';
+  }
+
+  /* what Save would do with the current title, and why not if it can't */
+  function describeNewSpec(){
+    const title = newSpec.title.trim();
+    if(!title){
+      return { ok:false, kind:'', text:'Type a title — it becomes the filename.' };
+    }
+    const name = filenameFromTitle(title);
+    if(!name){
+      return { ok:false, kind:'warn', text:'The title needs at least one letter or number.' };
+    }
+    if(Array.from(name).length - '.md'.length > MAX_SPEC_NAME_CHARS){
+      return { ok:false, kind:'warn', text:'That title is too long for a filename (limit ' + MAX_SPEC_NAME_CHARS + ' characters).' };
+    }
+    if(files.some(f => f.toLowerCase() === name.toLowerCase())){
+      return { ok:false, kind:'err', name, text: name + ' already exists.' };
+    }
+    return { ok:true, kind:'', name };
+  }
+
+  function updateNewSpecState(){
+    if(!creating || !newSpec) return;
+    const state = describeNewSpec();
+    hintEl.className = 'new-spec-hint';
+    hintEl.textContent = '';
+    if(serverError){
+      hintEl.classList.add('err');
+      hintEl.textContent = serverError;
+    } else if(state.ok){
+      hintEl.append('Saves as ');
+      const code = document.createElement('code');
+      code.textContent = state.name;
+      hintEl.appendChild(code);
+    } else {
+      if(state.kind) hintEl.classList.add(state.kind);
+      hintEl.textContent = state.text;
+    }
+    // a server refusal stands until the title changes, so retrying can't just repeat it
+    saveBtn.disabled = saving || !state.ok || !!serverError;
+  }
+
+  /* header controls for whichever mode is showing */
+  function syncHead(){
+    const doc = activeDoc();
+    fileNameEl.hidden = creating;
+    fileNameEl.textContent = creating || !current ? '' : current.name;
+    titleInput.hidden = !creating;
+    hintEl.hidden = !creating;
+    viewTabs.hidden = !doc;
+    saveBtn.hidden = !doc;
+    tabPreview.classList.toggle('active', activeTab === 'preview');
+    tabEdit.classList.toggle('active', activeTab === 'edit');
+    if(creating){
+      updateNewSpecState();
+    } else {
+      saveBtn.disabled = false;
+    }
+  }
+
+  function openNewSpec(){
+    if(!newSpec) newSpec = { title:'', content:'' };
+    creating = true;
+    activeTab = 'edit';
+    serverError = '';
+    statusEl.textContent = '';
+    statusEl.className = 'save-status';
+    titleInput.value = newSpec.title;
+    syncHead();
+    renderSidebar();
+    renderBody();
+    titleInput.focus();
   }
 
   /* ---------- preview / edit body ---------- */
   function renderBody(){
     specBody.innerHTML = '';
-    if(!current){
-      specBody.innerHTML = '<div class="spec-empty">Select a file from the sidebar to preview or edit it.</div>';
+    const doc = activeDoc();
+    if(!doc){
+      specBody.innerHTML = '<div class="spec-empty">Select a spec from the sidebar to preview or edit it, or add a new one.</div>';
       return;
     }
     const preview = document.createElement('div');
@@ -405,13 +570,32 @@
     preview.id = 'spec-preview';
     const editor = document.createElement('textarea');
     editor.id = 'spec-editor';
-    editor.value = current.content;
+    editor.value = doc.content;
 
     if(activeTab === 'preview'){
       editor.hidden = true;
-      renderMarkdown(preview, current.content);
+      if(creating && !doc.content.trim()){
+        preview.innerHTML = '<div class="spec-empty">Nothing to preview yet.</div>';
+      } else {
+        renderMarkdown(preview, doc.content);
+      }
     } else {
       preview.hidden = true;
+    }
+
+    if(creating){
+      editor.placeholder = 'Write the spec in markdown…';
+      // keep the draft current as you type, so nothing depends on the DOM surviving
+      editor.addEventListener('input', () => {
+        newSpec.content = editor.value;
+        updateNewSpecState();
+      });
+      editor.addEventListener('keydown', (e) => {
+        if(e.key === 'Enter' && (e.ctrlKey || e.metaKey)){
+          e.preventDefault();
+          createSpec();
+        }
+      });
     }
 
     specBody.appendChild(preview);
@@ -422,12 +606,41 @@
     activeTab = tab;
     tabPreview.classList.toggle('active', tab === 'preview');
     tabEdit.classList.toggle('active', tab === 'edit');
-    if(tab === 'preview' && current){
+    const doc = activeDoc();
+    if(tab === 'preview' && doc){
       const editor = document.getElementById('spec-editor');
-      if(editor) current.content = editor.value;
+      if(editor) doc.content = editor.value;
     }
     renderBody();
   }
+
+  titleInput.addEventListener('input', () => {
+    if(!newSpec) return;
+    newSpec.title = titleInput.value;
+    serverError = '';
+    updateNewSpecState();
+  });
+  titleInput.addEventListener('keydown', (e) => {
+    if(e.key !== 'Enter') return;
+    e.preventDefault();
+    if(e.ctrlKey || e.metaKey){
+      createSpec();
+      return;
+    }
+    // plain Enter moves on to the body rather than saving, so a half-typed
+    // title can't create a file
+    if(activeTab !== 'edit') switchTab('edit');
+    const editor = document.getElementById('spec-editor');
+    if(editor) editor.focus();
+  });
+
+  // closing the tab with a draft parked or showing would throw it away
+  window.addEventListener('beforeunload', (e) => {
+    if(draftHasText()){
+      e.preventDefault();
+      e.returnValue = '';
+    }
+  });
 
   tabPreview.addEventListener('click', () => switchTab('preview'));
   tabEdit.addEventListener('click', () => switchTab('edit'));
@@ -454,14 +667,12 @@
       if(!res.ok) throw new Error('server responded ' + res.status);
       const data = await res.json();
       current = { name, content: data.content || '' };
+      // leaving the new-spec pane parks the draft (newSpec) rather than dropping it
+      creating = false;
       activeTab = 'preview';
-      fileNameEl.textContent = name;
-      viewTabs.hidden = false;
-      saveBtn.hidden = false;
       statusEl.textContent = '';
       statusEl.className = 'save-status';
-      tabPreview.classList.add('active');
-      tabEdit.classList.remove('active');
+      syncHead();
       renderSidebar();
       renderBody();
     }catch(err){
@@ -470,7 +681,61 @@
     }
   }
 
+  /* The draft is only cleared once the server has confirmed the new file, so a
+     refusal or a dead connection leaves everything typed exactly where it was.
+     The server never overwrites: a name that already exists comes back as 409. */
+  async function createSpec(){
+    if(!creating || !newSpec || saving) return;
+    const state = describeNewSpec();
+    if(!state.ok || serverError) return;
+
+    const editor = document.getElementById('spec-editor');
+    if(editor) newSpec.content = editor.value;
+
+    saving = true;
+    updateNewSpecState();
+    statusEl.textContent = 'Saving…';
+    statusEl.className = 'save-status';
+    try{
+      const res = await fetch('/api/markdown/create', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ name: state.name, content: newSpec.content })
+      });
+      if(res.status === 400 || res.status === 409){
+        const data = await res.json().catch(() => ({}));
+        serverError = data.error || 'The server could not create this spec.';
+        statusEl.textContent = '';
+        if(res.status === 409) await loadFileList();
+        return;
+      }
+      if(!res.ok) throw new Error('save failed');
+
+      newSpec = null;
+      creating = false;
+      serverError = '';
+      titleInput.value = '';
+      await loadFileList();
+      await selectFile(state.name);
+      syncHead();
+      renderSidebar();
+      renderBody();
+      statusEl.textContent = 'Saved';
+      statusEl.className = 'save-status ok';
+    }catch(err){
+      statusEl.textContent = 'Save failed — is the server running?';
+      statusEl.className = 'save-status err';
+    }finally{
+      saving = false;
+      updateNewSpecState();
+    }
+  }
+
   saveBtn.addEventListener('click', async () => {
+    if(creating){
+      createSpec();
+      return;
+    }
     if(!current) return;
     const editor = document.getElementById('spec-editor');
     if(editor) current.content = editor.value;
