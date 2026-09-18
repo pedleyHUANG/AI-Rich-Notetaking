@@ -203,6 +203,15 @@
   }
   .order-btn:hover{ border-color: var(--text-faint); }
   .order-btn[hidden]{ display:none; }
+  .add-btn{
+    margin-left:auto;
+    background:#e9f1eb; border:1px solid #bcd9c2; color:#3a6b46; border-radius:5px;
+    padding:5px 12px; cursor:pointer; font-weight:600;
+  }
+  .add-btn:hover{ border-color:#3a6b46; }
+  .add-btn[hidden]{ display:none; }
+  /* both buttons want the auto margin; only the first of a visible pair gets it */
+  .add-btn:not([hidden]) + .order-btn{ margin-left:0; }
   .save-status{ color: var(--text-dim); }
   .save-status.err{ color: #b5453d; }
   .save-status.ok{ color: #4c8a58; }
@@ -357,6 +366,78 @@
     margin: 0 0 14px calc(var(--rail) + 24px);
   }
 
+  /* ---------- composer ---------- */
+  .composer{
+    background: var(--surface); border:1px solid var(--border); border-radius:8px;
+    margin: 0 0 22px; overflow:hidden;
+  }
+  .composer-stripe{ height:4px; background: var(--rail-line); }
+  .composer-body{ padding: 14px 16px 16px; }
+  .composer-head{
+    display:flex; align-items:center; flex-wrap:wrap; gap:8px 10px; margin-bottom: 4px;
+  }
+  .composer-title{
+    font-family: var(--font-title); font-weight:700; letter-spacing:0.08em; color: var(--text);
+    font-size:0.78rem;
+  }
+  .composer-filing{ color: var(--text-dim); }
+  .composer-filing b{ color: var(--text); font-weight:600; }
+  .composer label{
+    display:block; text-transform:uppercase; letter-spacing:0.05em; margin: 12px 0 4px;
+    color: var(--text-faint); font-size:0.72rem;
+  }
+  .composer .hint{ text-transform:none; letter-spacing:0; }
+  .composer input[type=text], .composer textarea, .composer input[type=date], .composer select{
+    width:100%; background: var(--surface-alt); border:1px solid var(--border);
+    border-radius:5px; color: var(--text); font-weight:400; padding:7px 10px;
+  }
+  .composer input:focus, .composer textarea:focus, .composer select:focus{
+    outline: 2px solid #b8c6d9; outline-offset:1px;
+  }
+  .composer textarea{ min-height: 110px; resize: vertical; }
+
+  .chip-row{ display:flex; flex-wrap:wrap; gap:6px; margin-top:4px; }
+  .chip-row.shake{ animation: shake .3s ease; }
+  @keyframes shake{
+    0%,100%{ transform: translateX(0); }
+    25%{ transform: translateX(-4px); }
+    75%{ transform: translateX(4px); }
+  }
+  .chip{
+    display:flex; align-items:center; gap:6px;
+    font-family: var(--font-content); font-weight:400; color: var(--text);
+    background: var(--surface-alt); border:1px solid var(--border); border-radius:20px;
+    padding:4px 11px 4px 7px; cursor:pointer;
+    transition: border-color .15s ease, background-color .15s ease;
+  }
+  .chip .swatch{ width:9px; height:9px; border-radius:50%; flex-shrink:0; }
+  .chip:hover{ border-color: var(--text-faint); }
+  .chip.selected{ background:#eef2f6; border-color:#9fb3c8; font-weight:600; }
+  .chip.chip-prompt.selected{ background: var(--prompt-soft); border-color: var(--prompt); color:#a85a1f; }
+  .chip.locked{ cursor:default; font-weight:600; background:#eef2f6; border-color:#9fb3c8; }
+  .chip.locked:hover{ border-color:#9fb3c8; }
+
+  .composer-when{ display:flex; gap:8px; align-items:center; }
+  .composer-when input[type=date]{ flex:1.4; }
+  .composer-when select{ flex:1; }
+  .composer .when-label{
+    display:flex; align-items:center; gap:6px; text-transform:none; letter-spacing:0;
+    margin: 12px 0 4px; cursor:pointer; font-size:0.85rem; color: var(--text-dim);
+  }
+  .composer .when-label input[type=checkbox]{ width:auto; margin:0; }
+
+  .composer-actions{ display:flex; gap:8px; justify-content:flex-end; margin-top:14px; }
+  .composer-actions button{
+    background: var(--surface-alt); border:1px solid var(--border); border-radius:6px;
+    padding:8px 13px; cursor:pointer; color: var(--text-dim);
+  }
+  .composer-actions button:hover{ border-color: var(--text-faint); }
+  .composer-actions button.primary{
+    background:#e9f1eb; border-color:#bcd9c2; color:#3a6b46; font-weight:600; padding:9px 14px;
+  }
+  .composer-actions button.primary:hover{ border-color:#3a6b46; }
+  .composer-actions button:disabled{ opacity:0.5; cursor:default; }
+
   /* a quiet stretch between two entries, drawn over the rail */
   .tl-gap{
     position:relative;
@@ -472,6 +553,7 @@
       <div class="center-head-row">
         <span class="center-title">CONVERSATION</span>
         <span class="topic-name" id="topic-name"></span>
+        <button class="add-btn" id="add-btn" hidden>+ Add entry</button>
         <button class="order-btn" id="order-btn" hidden>Newest first</button>
         <span class="save-status" id="save-status"></span>
       </div>
@@ -533,6 +615,8 @@
   const LONG_CONVERSATION_TAG = 'LONG CONVERSATION';
   const NO_TOPIC = '(no topic)';
   const TOPIC_MIN_CHARS = 5;
+  // matches the Ai Log form's cap; the locked LONG CONVERSATION tag counts toward it
+  const MAX_CATEGORIES = 6;
   const GAP_DAYS = 2;
   const DAY_MS = 86400000;
 
@@ -540,6 +624,14 @@
   let topics = [];
   let currentTopic = null;
   let newestFirst = true;
+
+  /* An open composer IS a draft: drafts.has(topic) means that topic's composer is
+     showing. Keeping the text here (not in the DOM) is what lets the timeline
+     re-render -- reordering, filing another entry, hopping to a different topic
+     and back -- without wiping what was typed. */
+  const drafts = new Map();
+  let composerSaving = false;
+  let focusComposerOnRender = false;
 
   const sidebarScroll = document.getElementById('sidebar-scroll');
   const timelineScroll = document.getElementById('timeline-scroll');
@@ -549,9 +641,25 @@
   const spanBarEl = document.getElementById('span-bar');
   const spanEndsEl = document.getElementById('span-ends');
   const orderBtn = document.getElementById('order-btn');
+  const addBtn = document.getElementById('add-btn');
   const statusEl = document.getElementById('save-status');
 
   /* ---------- dates ---------- */
+  function pad(n){ return String(n).padStart(2, '0'); }
+
+  function nowIso(){
+    const d = new Date();
+    return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate())
+      + 'T' + pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
+  }
+
+  function todayValue(){
+    const d = new Date();
+    return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+  }
+
+  function currentHour(){ return String(new Date().getHours()); }
+
   function dateKey(ts){ return ts.slice(0, 10); }
   function dayStamp(ts){ return new Date(dateKey(ts) + 'T00:00:00').getTime(); }
   function daysBetween(a, b){ return Math.round(Math.abs(dayStamp(b) - dayStamp(a)) / DAY_MS); }
@@ -679,10 +787,14 @@
       topicSpanEl.textContent = '';
       spanBarWrap.hidden = true;
       orderBtn.hidden = true;
+      addBtn.hidden = true;
       return;
     }
     topicNameEl.textContent = topic.name;
     orderBtn.hidden = topic.entries.length < 2;
+    // the (no topic) bucket holds entries that were never filed, so adding
+    // straight into it would only make more of them
+    addBtn.hidden = topic.name === NO_TOPIC;
 
     const count = topic.entries.length + (topic.entries.length === 1 ? ' entry' : ' entries');
     if(topic.entries.length < 2){
@@ -926,10 +1038,303 @@
     return card;
   }
 
+  /* ---------- composer ---------- */
+  function newDraft(){
+    return { title:'', content:'', tags:new Set(), backdate:false, date:'', hour:currentHour() };
+  }
+
+  function draftHasText(draft){
+    return !!(draft.title.trim() || draft.content.trim());
+  }
+
+  // a draft for a topic that no longer exists can't be reached, so it shouldn't nag
+  function hasUnsavedDraft(){
+    return Array.from(drafts.entries()).some(([name, draft]) =>
+      draftHasText(draft) && topics.some(t => t.name === name));
+  }
+
+  /* like the Ai Log form: the date only counts while "Log this in the past" is
+     ticked, so unticking it forces "now" without clearing the date field */
+  function draftTimestamp(draft){
+    if(draft.backdate && draft.date){
+      return draft.date + 'T' + pad(Number(draft.hour)) + ':00:00';
+    }
+    return nowIso();
+  }
+
+  function openComposer(){
+    const topic = findTopic(currentTopic);
+    if(!topic || topic.name === NO_TOPIC) return;
+    if(!drafts.has(topic.name)) drafts.set(topic.name, newDraft());
+    focusComposerOnRender = true;
+    renderTimeline();
+    timelineScroll.scrollTop = 0;
+  }
+
+  function buildComposer(topic){
+    const draft = drafts.get(topic.name);
+
+    const wrap = document.createElement('div');
+    wrap.className = 'composer';
+    wrap.id = 'composer';
+
+    const stripe = document.createElement('div');
+    stripe.className = 'composer-stripe';
+    stripe.style.background = tagColor(LONG_CONVERSATION_TAG);
+    wrap.appendChild(stripe);
+
+    const body = document.createElement('div');
+    body.className = 'composer-body';
+    wrap.appendChild(body);
+
+    // header: which conversation this is going into, and why it can't be changed here
+    const head = document.createElement('div');
+    head.className = 'composer-head';
+    const heading = document.createElement('span');
+    heading.className = 'composer-title';
+    heading.textContent = 'NEW ENTRY';
+    const locked = document.createElement('span');
+    locked.className = 'chip locked';
+    locked.title = 'Every entry on this page carries this tag';
+    const lockedSwatch = document.createElement('span');
+    lockedSwatch.className = 'swatch';
+    lockedSwatch.style.background = tagColor(LONG_CONVERSATION_TAG);
+    locked.appendChild(lockedSwatch);
+    locked.append(LONG_CONVERSATION_TAG);
+    const filing = document.createElement('span');
+    filing.className = 'composer-filing';
+    filing.append('filing under ');
+    const filingName = document.createElement('b');
+    filingName.textContent = topic.name;
+    filing.appendChild(filingName);
+    head.appendChild(heading);
+    head.appendChild(locked);
+    head.appendChild(filing);
+    body.appendChild(head);
+
+    // title
+    const titleLabel = document.createElement('label');
+    titleLabel.htmlFor = 'composer-title';
+    titleLabel.innerHTML = 'Title <span class="hint">(optional)</span>';
+    const titleInput = document.createElement('input');
+    titleInput.type = 'text';
+    titleInput.id = 'composer-title';
+    titleInput.placeholder = 'Short heading';
+    titleInput.value = draft.title;
+    body.appendChild(titleLabel);
+    body.appendChild(titleInput);
+
+    // other tags
+    const tagsLabel = document.createElement('label');
+    tagsLabel.innerHTML = 'Other tags <span class="hint">(up to ' + (MAX_CATEGORIES - 1) + ', optional)</span>';
+    const tagRow = document.createElement('div');
+    tagRow.className = 'chip-row';
+    tagRow.id = 'composer-tags';
+    body.appendChild(tagsLabel);
+    body.appendChild(tagRow);
+
+    function paintTags(){
+      tagRow.innerHTML = '';
+      Object.keys(store.tags)
+        .filter(name => name !== LONG_CONVERSATION_TAG)
+        .forEach(name => {
+          const chip = document.createElement('button');
+          chip.type = 'button';
+          chip.className = 'chip' + (draft.tags.has(name) ? ' selected' : '')
+            + (name === 'PROMPT!' ? ' chip-prompt' : '');
+          const swatch = document.createElement('span');
+          swatch.className = 'swatch';
+          swatch.style.background = tagColor(name);
+          chip.appendChild(swatch);
+          chip.append(name);
+          chip.addEventListener('click', () => {
+            if(draft.tags.has(name)){
+              draft.tags.delete(name);
+            } else {
+              if(draft.tags.size + 1 >= MAX_CATEGORIES){
+                tagRow.classList.remove('shake');
+                void tagRow.offsetWidth;
+                tagRow.classList.add('shake');
+                return;
+              }
+              draft.tags.add(name);
+            }
+            paintTags();
+          });
+          tagRow.appendChild(chip);
+        });
+    }
+    paintTags();
+
+    // content
+    const contentLabel = document.createElement('label');
+    contentLabel.htmlFor = 'composer-content';
+    contentLabel.innerHTML = 'Content <span class="hint">(optional)</span>';
+    const contentInput = document.createElement('textarea');
+    contentInput.id = 'composer-content';
+    contentInput.placeholder = 'What happened in this session…';
+    contentInput.value = draft.content;
+    body.appendChild(contentLabel);
+    body.appendChild(contentInput);
+
+    // when: the checkbox follows the date, it doesn't gate it
+    const whenLabel = document.createElement('label');
+    whenLabel.className = 'when-label';
+    const backdateBox = document.createElement('input');
+    backdateBox.type = 'checkbox';
+    backdateBox.id = 'composer-backdate';
+    backdateBox.checked = draft.backdate;
+    whenLabel.appendChild(backdateBox);
+    whenLabel.append(' Log this in the past');
+    const whenRow = document.createElement('div');
+    whenRow.className = 'composer-when';
+    const dateInput = document.createElement('input');
+    dateInput.type = 'date';
+    dateInput.id = 'composer-date';
+    dateInput.value = draft.date;
+    const hourSelect = document.createElement('select');
+    hourSelect.id = 'composer-hour';
+    for(let h = 0; h < 24; h++){
+      const opt = document.createElement('option');
+      opt.value = String(h);
+      opt.textContent = pad(h) + ':00';
+      hourSelect.appendChild(opt);
+    }
+    hourSelect.value = draft.hour;
+    whenRow.appendChild(dateInput);
+    whenRow.appendChild(hourSelect);
+    body.appendChild(whenLabel);
+    body.appendChild(whenRow);
+
+    // actions
+    const actions = document.createElement('div');
+    actions.className = 'composer-actions';
+    const cancelBtn = document.createElement('button');
+    cancelBtn.type = 'button';
+    cancelBtn.id = 'composer-cancel';
+    cancelBtn.textContent = 'Cancel';
+    const submitBtn = document.createElement('button');
+    submitBtn.type = 'button';
+    submitBtn.id = 'composer-submit';
+    submitBtn.className = 'primary';
+    submitBtn.textContent = 'Add entry';
+    actions.appendChild(cancelBtn);
+    actions.appendChild(submitBtn);
+    body.appendChild(actions);
+
+    function syncSubmit(){
+      submitBtn.disabled = composerSaving || !draftHasText(draft);
+    }
+    syncSubmit();
+
+    titleInput.addEventListener('input', () => { draft.title = titleInput.value; syncSubmit(); });
+    contentInput.addEventListener('input', () => { draft.content = contentInput.value; syncSubmit(); });
+
+    backdateBox.addEventListener('change', () => {
+      draft.backdate = backdateBox.checked;
+      if(draft.backdate && !draft.date){
+        draft.date = todayValue();
+        dateInput.value = draft.date;
+        draft.hour = currentHour();
+        hourSelect.value = draft.hour;
+      }
+    });
+    // picking a date IS the request to backdate; setting .checked in code fires
+    // no change event, so none of these can re-enter the handler above
+    dateInput.addEventListener('change', () => {
+      draft.date = dateInput.value;
+      draft.backdate = !!draft.date;
+      backdateBox.checked = draft.backdate;
+    });
+    hourSelect.addEventListener('change', () => {
+      draft.hour = hourSelect.value;
+      if(!draft.date){
+        draft.date = todayValue();
+        dateInput.value = draft.date;
+      }
+      draft.backdate = true;
+      backdateBox.checked = true;
+    });
+
+    cancelBtn.addEventListener('click', () => {
+      drafts.delete(topic.name);
+      renderTimeline();
+    });
+    submitBtn.addEventListener('click', () => submitDraft(topic.name));
+    [titleInput, contentInput].forEach(el => {
+      el.addEventListener('keydown', (e) => {
+        if(e.key === 'Enter' && (e.ctrlKey || e.metaKey)){
+          e.preventDefault();
+          submitDraft(topic.name);
+        }
+      });
+    });
+
+    if(focusComposerOnRender){
+      focusComposerOnRender = false;
+      // the node isn't in the document yet; focus once it is
+      setTimeout(() => contentInput.focus(), 0);
+    }
+    return wrap;
+  }
+
+  /* The entry is only added to the timeline after the server confirms it, so a
+     failed save leaves the composer exactly as it was rather than showing a node
+     that was never stored. */
+  async function submitDraft(topicName){
+    const draft = drafts.get(topicName);
+    if(!draft || composerSaving || !draftHasText(draft)) return;
+
+    const entry = {
+      id: 'e-' + Date.now() + '-' + Math.floor(Math.random() * 1000),
+      timestamp: draftTimestamp(draft),
+      title: capitalizeWords(draft.title.trim()),
+      question: '',
+      categories: [LONG_CONVERSATION_TAG].concat(Array.from(draft.tags)),
+      content: draft.content,
+      topic: topicName
+    };
+
+    composerSaving = true;
+    const submit = document.getElementById('composer-submit');
+    if(submit) submit.disabled = true;
+    const ok = await saveEntry(entry);
+    composerSaving = false;
+
+    if(!ok){
+      const again = document.getElementById('composer-submit');
+      if(again) again.disabled = !draftHasText(draft);
+      return;
+    }
+
+    store.entries.push(entry);
+    drafts.delete(topicName);
+    buildTopics();
+    renderSidebar();
+    // not selectTopic(): that rewrites the hash and jumps to the top, which
+    // would fight revealing the new node
+    renderHead(findTopic(currentTopic));
+    renderTimeline();
+    revealEntry(entry.id);
+  }
+
+  addBtn.addEventListener('click', openComposer);
+
+  window.addEventListener('beforeunload', (e) => {
+    if(hasUnsavedDraft()){
+      e.preventDefault();
+      e.returnValue = '';
+    }
+  });
+
   function renderTimeline(){
     const topic = findTopic(currentTopic);
     timelineScroll.innerHTML = '';
     if(!topic) return;
+
+    if(topic.name !== NO_TOPIC && drafts.has(topic.name)){
+      timelineScroll.appendChild(buildComposer(topic));
+    }
 
     if(topic.name === NO_TOPIC){
       const hint = document.createElement('div');
@@ -1097,9 +1502,11 @@
       if(!res.ok) throw new Error('save failed');
       statusEl.textContent = 'Saved';
       statusEl.className = 'save-status ok';
+      return true;
     }catch(err){
       statusEl.textContent = 'Save failed — is the server running?';
       statusEl.className = 'save-status err';
+      return false;
     }
   }
 
